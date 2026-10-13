@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Build Artifacts
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Heavy Model Binaries & Checkpoints
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.ckpt
+*.bin
+*.onnx
+*.safetensors
+*.weights
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
