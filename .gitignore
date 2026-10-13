@@ -40,6 +40,11 @@ htmlcov/
 *.safetensors
 *.weights
 
+# Generated static heatmaps
+ml_service/static/heatmaps/*.jpg
+ml_service/static/heatmaps/*.png
+!ml_service/static/heatmaps/.gitkeep
+
 # IDE & OS
 .vscode/
 .idea/
