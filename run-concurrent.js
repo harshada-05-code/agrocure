@@ -6,10 +6,10 @@ const isWin = os.platform() === 'win32';
 const rootDir = __dirname;
 
 console.log('==========================================================');
-console.log(' Starting AgroCure Backend Ecosystem');
-console.log(' 1. NestJS Gateway Orchestrator: http://localhost:3000');
-console.log(' 2. FastAPI ML Engine:          http://localhost:8000');
-console.log(' 3. Target Frontend:            https://agrocure.vercel.app/');
+console.log(' Starting AgroCure Full-Stack Ecosystem');
+console.log(' 1. React Web Frontend:        http://localhost:5173');
+console.log(' 2. NestJS Gateway Orchestrator: http://localhost:3000');
+console.log(' 3. FastAPI ML Engine:          http://localhost:8000');
 console.log('==========================================================');
 
 const pythonBin = isWin
@@ -40,14 +40,27 @@ const orchProcess = spawn(
   }
 );
 
+// 3. Spawn React Frontend
+const frontendProcess = spawn(
+  npmCmd,
+  ['run', 'dev'],
+  {
+    cwd: path.join(rootDir, 'frontend'),
+    stdio: 'inherit',
+    shell: true,
+  }
+);
+
 function cleanup() {
-  console.log('\nTerminating AgroCure backend services...');
+  console.log('\nTerminating AgroCure services...');
   if (isWin) {
     if (mlProcess.pid) spawn('taskkill', ['/pid', mlProcess.pid, '/f', '/t']);
     if (orchProcess.pid) spawn('taskkill', ['/pid', orchProcess.pid, '/f', '/t']);
+    if (frontendProcess.pid) spawn('taskkill', ['/pid', frontendProcess.pid, '/f', '/t']);
   } else {
     mlProcess.kill('SIGINT');
     orchProcess.kill('SIGINT');
+    frontendProcess.kill('SIGINT');
   }
   process.exit(0);
 }
