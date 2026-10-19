@@ -73,8 +73,9 @@ export const translations = {
     viewSchemesBtn: "सहायता योजनाएं देखें",
 
     // AI Honesty & Safety rules
-    soybeanOnlyWarning: "यह टूल केवल सोयाबीन की पत्ती की पहचान कर सकता है। यदि आप अन्य फसल उगा रहे हैं, तो यह टूल मदद नहीं कर सकता।",
-    nonSoybeanHelp: "अन्य फसल के लिए अपने नजदीकी कृषि विज्ञान केंद्र (KVK) या कृषि अधिकारी से संपर्क करें।",
+    soybeanOnlyWarning: "केवल सोयाबीन पत्तियों के लिए — अन्य फसल पहचान नहीं सकता।",
+    soybeanOnlyMicro: "केवल सोयाबीन पत्तियों के लिए",
+    nonSoybeanHelp: "अन्य फसल के लिए KVK या कृषि अधिकारी से संपर्क करें।",
     noDiseaseDetected: "इस फोटो में कोई बीमारी नहीं पाई गई। अपने खेत के अन्य पौधों की भी नियमित जांच करते रहें।",
     insectPestNotice: "कीट का प्रकोप (इल्ली / सेमीलूपर - यह कीट है, फफूंद रोग नहीं)",
     diseaseNotice: "फसल रोग के लक्षण",
@@ -183,8 +184,9 @@ export const translations = {
     viewSchemesBtn: "मदत योजना पहा",
 
     // AI Honesty & Safety rules
-    soybeanOnlyWarning: "हे साधन केवळ सोयाबीनच्या पानांचे रोग ओळखू शकते. आपण दुसरे पीक घेत असल्यास हे साधन मदत करू शकत नाही.",
-    nonSoybeanHelp: "इतर पिकांच्या माहितीसाठी आपल्या नजीकच्या कृषी विज्ञान केंद्र (KVK) किंवा कृषी अधिकाऱ्यांशी संपर्क साधा.",
+    soybeanOnlyWarning: "केवल सोयाबीन पानांसाठी — इतर पिके ओळखता येत नाहीत।",
+    soybeanOnlyMicro: "केवल सोयाबीन पानांसाठी",
+    nonSoybeanHelp: "इतर पिकांसाठी KVK किंवा कृषी अधिकाऱ्यांशी संपर्क करा.",
     noDiseaseDetected: "या फोटोमध्ये कोणताही रोग आढळला नाही. शेतातील इतर झाडांचीही नियमित पाहणी करत राहा.",
     insectPestNotice: "किडीचा प्रादुर्भाव (अळी / सेमीलूपर - ही कीड आहे, बुरशीजन्य रोग नाही)",
     diseaseNotice: "पिकावरील रोगाची लक्षणे",
@@ -293,8 +295,9 @@ export const translations = {
     viewSchemesBtn: "View Relief & Subsidies",
 
     // AI Honesty & Safety rules
-    soybeanOnlyWarning: "This tool only recognizes soybean leaves. If you are growing another crop, this tool cannot help with that crop.",
-    nonSoybeanHelp: "For other crops, consult your local Krishi Vigyan Kendra (KVK) or Agriculture Extension Officer.",
+    soybeanOnlyWarning: "Soybean leaves only — cannot identify other crops.",
+    soybeanOnlyMicro: "Soybean only",
+    nonSoybeanHelp: "For other crops, contact your local KVK or Agriculture Officer.",
     noDiseaseDetected: "No disease detected in this photo. Keep checking your plants regularly.",
     insectPestNotice: "Insect Pest Attack (Caterpillar / Semilooper - this is a pest, not a disease)",
     diseaseNotice: "Crop Disease Symptoms",
@@ -321,12 +324,12 @@ export const translations = {
     },
 
     diseaseNames: {
-      "Caterpillar and Semilooper Pest Attack": "Caterpillar & Semilooper Pest Attack",
-      "Healthy_Soyabean": "No Disease Detected (Healthy Leaf)",
-      "Soyabean_Frog_Leaf_Eye": "Frogeye Leaf Spot (Cercospora sojina)",
-      "Soyabean_Mosaic": "Soybean Mosaic Virus (SMV)",
-      "Soyabean_Rust": "Soybean Rust (Phakopsora pachyrhizi)",
-      "Soyabean_Spectoria_Brown_Spot": "Septoria Brown Spot (Septoria glycines)",
+      "Caterpillar and Semilooper Pest Attack": "Caterpillar & Semilooper Pest",
+      "Healthy_Soyabean": "No Disease Detected (Healthy)",
+      "Soyabean_Frog_Leaf_Eye": "Frogeye Leaf Spot",
+      "Soyabean_Mosaic": "Soybean Mosaic Virus",
+      "Soyabean_Rust": "Soybean Rust",
+      "Soyabean_Spectoria_Brown_Spot": "Septoria Brown Spot",
     },
   },
 };

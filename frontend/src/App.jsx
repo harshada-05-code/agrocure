@@ -34,6 +34,7 @@ import {
   getDifferentialDiagnosisNote,
 } from './confidenceHelper';
 import { GOVERNMENT_SCHEMES } from './schemes.data';
+import VoiceGuide from './components/VoiceGuide';
 
 export default function App() {
   // Persistent Language preference
@@ -280,6 +281,30 @@ export default function App() {
   const isUnclearDiagnosis = diagnosis ? isLowConfidenceOrUnclear(primaryScore) : false;
   const topClass = diagnosis?.diagnosis?.predicted_class || '';
 
+  // Build voice narration text for VoiceGuide
+  const voiceText = React.useMemo(() => {
+    if (!diagnosis) return '';
+    const predClass = diagnosis.diagnosis.predicted_class;
+    const diseaseName = t.diseaseNames[predClass] || predClass;
+    const bandLabel = t.bands[getConfidenceBand(diagnosis.diagnosis.confidence)];
+    let text = `${t.diagnosisResult}: ${diseaseName}. ${t.confidence}: ${bandLabel}. `;
+    if (isNoDiseaseDetected(predClass)) {
+      text += `${t.noDiseaseDetected} `;
+    } else if (isInsectPest(predClass)) {
+      text += `${t.insectPestNotice}. `;
+    }
+    const diffNote = getDifferentialDiagnosisNote(predClass, t);
+    if (diffNote) text += `${diffNote} `;
+    if (diagnosis.remedy?.chemical?.medicine) {
+      text += `${t.chemicalTab}: ${diagnosis.remedy.chemical.medicine}. ${t.labelInstructionsOnly}. `;
+    }
+    if (diagnosis.remedy?.organic?.solution) {
+      text += `${t.organicTab}: ${diagnosis.remedy.organic.solution}. `;
+    }
+    text += t.mandatoryPesticideSafety;
+    return text;
+  }, [diagnosis, lang, t]);
+
   return (
     <main className="agro-shell">
       {/* Accessibility & Customizability Bar */}
@@ -338,16 +363,22 @@ export default function App() {
               मराठी
             </button>
           </div>
+          {/* VoiceGuide in header for instant accessibility */}
+          {diagnosis && (
+            <VoiceGuide
+              text={voiceText}
+              lang={lang}
+              labelPlay={t.listenVoice}
+              labelStop={t.stopVoice}
+            />
+          )}
         </div>
       </header>
 
-      {/* Soybean Scope Notice Banner */}
+      {/* Soybean Scope Notice Banner — concise micro-copy */}
       <div className="soybean-scope-banner" role="status">
-        <AlertCircle size={20} style={{ flexShrink: 0, marginTop: '2px' }} />
-        <div>
-          <p>{t.soybeanOnlyWarning}</p>
-          <span style={{ fontSize: '0.8rem', opacity: 0.9 }}>{t.nonSoybeanHelp}</span>
-        </div>
+        <AlertCircle size={18} style={{ flexShrink: 0 }} />
+        <span>{t.soybeanOnlyMicro || t.soybeanOnlyWarning}</span>
       </div>
 
       {/* Greeting Banner */}
@@ -611,6 +642,26 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* VoiceGuide — prominent audio in results panel */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                    <VoiceGuide
+                      text={voiceText}
+                      lang={lang}
+                      labelPlay={t.listenVoice}
+                      labelStop={t.stopVoice}
+                    />
+                    {diagnosis._isMockFallback && (
+                      <span style={{
+                        fontSize: '0.78rem', fontWeight: 700,
+                        background: '#fef3c7', color: '#78350f',
+                        border: '1px solid #f59e0b', borderRadius: '6px',
+                        padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                      }}>
+                        ⚡ {lang === 'mr' ? 'ऑफलाइन डेमो' : lang === 'hi' ? 'ऑफ़लाइन डेमो' : 'Offline Demo'}
+                      </span>
+                    )}
+                  </div>
+
                   {/* Leaf & GradCAM Heatmap Toggle */}
                   <div className="image-inspection">
                     <div className="image-frame">
@@ -786,14 +837,12 @@ export default function App() {
 
               {/* Speech & New Scan Actions */}
               <div className="actions-footer">
-                <button
-                  className="audio-btn"
-                  onClick={toggleSpeech}
-                  aria-label={isSpeaking ? t.stopVoice : t.listenVoice}
-                >
-                  {isSpeaking ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                  <span>{isSpeaking ? t.stopVoice : t.listenVoice}</span>
-                </button>
+                <VoiceGuide
+                  text={voiceText}
+                  lang={lang}
+                  labelPlay={t.listenVoice}
+                  labelStop={t.stopVoice}
+                />
                 <button className="reset-btn" onClick={resetScan}>
                   <RotateCcw size={16} />
                   <span>{t.newScan}</span>
