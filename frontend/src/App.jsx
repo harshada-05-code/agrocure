@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Leaf,
   Camera,
@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Home,
   History,
-  HelpCircle,
   Volume2,
   VolumeX,
   Sparkles,
@@ -61,10 +60,9 @@ export default function App() {
   const [diagnosis, setDiagnosis] = useState(null);
   const [activeRemedyTab, setActiveRemedyTab] = useState('chemical');
   const [showHeatmap, setShowHeatmap] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [farmerFeedback, setFarmerFeedback] = useState(null);
 
-  // Recent scans (only persisted if consent is not explicitly rejected)
+  // Recent scans
   const [recentScans, setRecentScans] = useState(() => {
     try {
       const saved = localStorage.getItem('agrocure_scans');
@@ -142,23 +140,19 @@ export default function App() {
     setStepStatus(t.stepReceived);
 
     try {
-      // Local preview immediately for instant feedback
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
 
-      // Step 1: Compress image client-side for low-end phones & 2G/3G connections
       setStepStatus(t.stepCompressing);
       const readyFile = await compressLeafImage(file, 800, 0.78);
       setImageFile(readyFile);
 
-      // Step 2: Post to NestJS Gateway
       setStepStatus(t.stepAnalyzing);
       const result = await diagnoseCropImage(readyFile);
       setDiagnosis(result);
       setStepStatus(t.stepDone);
       setActiveTab('diagnose');
 
-      // Step 3: Save to recent scans if farmer consented
       if (consentChoice !== 'no') {
         const topConfidence = result.diagnosis.confidence;
         const newScan = {
@@ -190,7 +184,6 @@ export default function App() {
     }
   };
 
-  // Retry previous photo upload without losing user image
   const retryDiagnosis = () => {
     if (imageFile) {
       processImageFile(imageFile);
@@ -199,7 +192,6 @@ export default function App() {
     }
   };
 
-  // Consent handler
   const handleConsent = (choice) => {
     setConsentChoice(choice);
     localStorage.setItem('agrocure_consent', choice);
@@ -209,64 +201,13 @@ export default function App() {
     }
   };
 
-  // Farmer feedback rating
   const handleFeedback = (response) => {
     setFarmerFeedback(response);
   };
 
-  // Speech Synthesis Substitutivity
-  const toggleSpeech = () => {
-    if (!('speechSynthesis' in window)) return;
-
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-
-    if (!diagnosis) return;
-
-    const predClass = diagnosis.diagnosis.predicted_class;
-    const diseaseName = t.diseaseNames[predClass] || predClass;
-    const bandLabel = t.bands[getConfidenceBand(diagnosis.diagnosis.confidence)];
-
-    let speechText = `${t.diagnosisResult}: ${diseaseName}. ${t.confidence}: ${bandLabel}. `;
-
-    if (isNoDiseaseDetected(predClass)) {
-      speechText += `${t.noDiseaseDetected} `;
-    } else if (isInsectPest(predClass)) {
-      speechText += `${t.insectPestNotice}. `;
-    }
-
-    const diffNote = getDifferentialDiagnosisNote(predClass, t);
-    if (diffNote) {
-      speechText += `${diffNote} `;
-    }
-
-    if (diagnosis.remedy.chemical?.medicine) {
-      speechText += `${t.chemicalTab}: ${diagnosis.remedy.chemical.medicine}. ${t.labelInstructionsOnly}. `;
-    }
-
-    if (diagnosis.remedy.organic?.solution) {
-      speechText += `${t.organicTab}: ${diagnosis.remedy.organic.solution}. `;
-    }
-
-    speechText += t.mandatoryPesticideSafety;
-
-    const utterance = new SpeechSynthesisUtterance(speechText);
-    utterance.lang = lang === 'mr' ? 'mr-IN' : lang === 'hi' ? 'hi-IN' : 'en-US';
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
-  };
-
   const resetScan = () => {
-    if (isSpeaking && 'speechSynthesis' in window) {
+    if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      setIsSpeaking(false);
     }
     setImageFile(null);
     setImagePreview(null);
@@ -281,9 +222,15 @@ export default function App() {
   const isUnclearDiagnosis = diagnosis ? isLowConfidenceOrUnclear(primaryScore) : false;
   const topClass = diagnosis?.diagnosis?.predicted_class || '';
 
-  // Build voice narration text for VoiceGuide
-  const voiceText = React.useMemo(() => {
-    if (!diagnosis) return '';
+  // Dynamic voice text generation in active language
+  const voiceText = useMemo(() => {
+    if (!diagnosis) {
+      return lang === 'mr'
+        ? 'नमस्कार शेतकरी बंधूंनो, तुमच्या सोयाबीन पानाचा फोटो काढा किंवा अपलोड करा.'
+        : lang === 'hi'
+        ? 'नमस्कार किसान भाइयों, अपनी सोयाबीन पत्ती की फोटो लें या अपलोड करें।'
+        : 'Welcome farmer, please take or upload a soybean leaf photo.';
+    }
     const predClass = diagnosis.diagnosis.predicted_class;
     const diseaseName = t.diseaseNames[predClass] || predClass;
     const bandLabel = t.bands[getConfidenceBand(diagnosis.diagnosis.confidence)];
@@ -363,34 +310,37 @@ export default function App() {
               मराठी
             </button>
           </div>
-          {/* VoiceGuide in header for instant accessibility */}
-          {diagnosis && (
-            <VoiceGuide
-              text={voiceText}
-              lang={lang}
-              labelPlay={t.listenVoice}
-              labelStop={t.stopVoice}
-            />
-          )}
+
+          {/* Always Available Header Voice Guide */}
+          <VoiceGuide
+            text={voiceText}
+            lang={lang}
+            labelPlay={t.listenVoice || (lang === 'mr' ? 'ऐका' : lang === 'hi' ? 'सुनिए' : 'Listen')}
+            labelStop={t.stopVoice || (lang === 'mr' ? 'थांबा' : lang === 'hi' ? 'रोकें' : 'Stop')}
+          />
         </div>
       </header>
 
-      {/* Soybean Scope Notice Banner — concise micro-copy */}
+      {/* Soybean Scope Notice Banner */}
       <div className="soybean-scope-banner" role="status">
         <AlertCircle size={18} style={{ flexShrink: 0 }} />
         <span>{t.soybeanOnlyMicro || t.soybeanOnlyWarning}</span>
       </div>
 
-      {/* Greeting Banner */}
+      {/* Greeting Banner & Fixed Green Online Pulse Indicator */}
       <section className="welcome-row">
         <div>
-          <p className="eyebrow">
-            {t.offlineReady}{' '}
-            <span
-              className={`status-dot ${isBackendOnline ? '' : 'disconnected'}`}
-              aria-hidden="true"
-            ></span>
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            {/* Pulsing Green Status Dot */}
+            <span className="relative flex h-3 w-3">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isBackendOnline ? 'bg-green-400' : 'bg-amber-400'} opacity-75`}></span>
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${isBackendOnline ? 'bg-green-600' : 'bg-amber-500'}`}></span>
+            </span>
+            <span className="text-xs font-bold tracking-wider text-green-800 uppercase">
+              {isBackendOnline ? t.offlineReady || 'SYSTEM ONLINE & READY' : 'OFFLINE MODE'}
+            </span>
+          </div>
+
           <h1>{t.greeting}</h1>
           <p className="subtitle">{t.subtitle}</p>
         </div>
@@ -399,7 +349,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* Privacy Consent Prompt (if not answered yet) */}
+      {/* Privacy Consent Prompt */}
       {!consentChoice && (
         <section className="consent-card" aria-labelledby="consent-title">
           <div className="consent-header" id="consent-title">
@@ -488,7 +438,6 @@ export default function App() {
       {/* View: Standard Scanner & Live Results */}
       {activeTab !== 'schemes' && (
         <>
-          {/* Scan Action Card */}
           {!diagnosis && !loading && (
             <section className="scan-card" aria-labelledby="scan-heading">
               <div className="scan-copy">
@@ -527,7 +476,7 @@ export default function App() {
             </section>
           )}
 
-          {/* Observability: Progress Card */}
+          {/* Progress Card */}
           {loading && (
             <div className="progress-card" role="status" aria-live="polite">
               <div className="spinner" aria-hidden="true"></div>
@@ -551,7 +500,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Responsiveness & Error Recovery */}
+          {/* Error Recovery */}
           {error && (
             <div
               style={{
@@ -582,7 +531,6 @@ export default function App() {
           {/* Live Diagnosis Result View */}
           {diagnosis && !loading && (
             <section className="result-container" aria-labelledby="result-heading">
-              {/* Case 1: Unclear / Low Confidence */}
               {isUnclearDiagnosis ? (
                 <div className="not-sure-box">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -642,31 +590,11 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* VoiceGuide — prominent audio in results panel */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                    <VoiceGuide
-                      text={voiceText}
-                      lang={lang}
-                      labelPlay={t.listenVoice}
-                      labelStop={t.stopVoice}
-                    />
-                    {diagnosis._isMockFallback && (
-                      <span style={{
-                        fontSize: '0.78rem', fontWeight: 700,
-                        background: '#fef3c7', color: '#78350f',
-                        border: '1px solid #f59e0b', borderRadius: '6px',
-                        padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                      }}>
-                        ⚡ {lang === 'mr' ? 'ऑफलाइन डेमो' : lang === 'hi' ? 'ऑफ़लाइन डेमो' : 'Offline Demo'}
-                      </span>
-                    )}
-                  </div>
-
                   {/* Leaf & GradCAM Heatmap Toggle */}
                   <div className="image-inspection">
                     <div className="image-frame">
                       <img
-                        src={showHeatmap ? diagnosis.diagnosis.gradcam_heatmap_url : imagePreview}
+                        src={showHeatmap ? (diagnosis.diagnosis.gradcam_heatmap_url || imagePreview) : imagePreview}
                         alt="Soybean leaf scan"
                       />
                     </div>
@@ -679,11 +607,11 @@ export default function App() {
                       <span>{showHeatmap ? t.originalPhoto : t.gradcamToggle}</span>
                     </button>
                     {showHeatmap && (
-                      <p className="heatmap-caption">{t.heatmapExplanation}</p>
+                      <p className="heatmap-caption">{t.heatmapExplanation || 'Grad-CAM visual heatmap showing leaf areas evaluated by model.'}</p>
                     )}
                   </div>
 
-                  {/* Differential Diagnosis Warning ("Could also be...") */}
+                  {/* Differential Diagnosis Warning */}
                   {isConfusableCondition(topClass) && (
                     <div className="differential-box" role="note">
                       <div className="diff-header">
@@ -694,7 +622,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Top 3 Possibilities (Qualitative Bands, Not Raw Percentages) */}
+                  {/* Top 3 Possibilities */}
                   <div className="candidates-section">
                     <h4>{t.topCandidates}</h4>
                     {diagnosis.diagnosis.top3_classes.map((cand, idx) => (
@@ -714,7 +642,7 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* Agronomic Remedies Tabs (No specific dosages; label-based) */}
+                  {/* Agronomic Remedies Tabs */}
                   <div className="remedies-section">
                     <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '10px' }}>
                       {t.remediesTitle}
@@ -758,20 +686,19 @@ export default function App() {
                         <div>
                           <div className="remedy-item">
                             <strong>दवा / Chemical Active Ingredient</strong>
-                            <p>{diagnosis.remedy.chemical?.medicine}</p>
+                            <p>{diagnosis.remedy?.chemical?.medicine}</p>
                           </div>
                           <div className="remedy-item">
                             <strong>{t.dosage}</strong>
-                            <p>{diagnosis.remedy.chemical?.dosage || t.labelInstructionsOnly}</p>
+                            <p>{diagnosis.remedy?.chemical?.dosage || t.labelInstructionsOnly}</p>
                           </div>
                           <div className="remedy-item">
                             <strong>{t.safetyInterval}</strong>
                             <p>
-                              {diagnosis.remedy.chemical?.safety_interval_days} {t.days}
+                              {diagnosis.remedy?.chemical?.safety_interval_days} {t.days}
                             </p>
                           </div>
 
-                          {/* Mandatory Pesticide Safety Advisory */}
                           <div className="pesticide-safety-card">
                             <ShieldCheck size={22} style={{ flexShrink: 0, marginTop: '2px' }} />
                             <p>{t.mandatoryPesticideSafety}</p>
@@ -782,14 +709,14 @@ export default function App() {
                       {activeRemedyTab === 'organic' && (
                         <div className="remedy-item">
                           <strong>जैविक समाधान / Organic Solution</strong>
-                          <p>{diagnosis.remedy.organic?.solution}</p>
+                          <p>{diagnosis.remedy?.organic?.solution}</p>
                         </div>
                       )}
 
                       {activeRemedyTab === 'cultural' && (
                         <div className="remedy-item">
                           <strong>खेत प्रबंधन / Cultural Practices</strong>
-                          <p>{diagnosis.remedy.cultural}</p>
+                          <p>{diagnosis.remedy?.cultural}</p>
                         </div>
                       )}
                     </div>
@@ -840,8 +767,8 @@ export default function App() {
                 <VoiceGuide
                   text={voiceText}
                   lang={lang}
-                  labelPlay={t.listenVoice}
-                  labelStop={t.stopVoice}
+                  labelPlay={t.listenVoice || (lang === 'mr' ? 'ऐका' : lang === 'hi' ? 'सुनिए' : 'Listen')}
+                  labelStop={t.stopVoice || (lang === 'mr' ? 'थांबा' : lang === 'hi' ? 'रोकें' : 'Stop')}
                 />
                 <button className="reset-btn" onClick={resetScan}>
                   <RotateCcw size={16} />
@@ -902,7 +829,7 @@ export default function App() {
         </>
       )}
 
-      {/* Bottom Sticky Navigation */}
+      {/* Bottom Navigation */}
       <nav className="bottom-nav" aria-label="Main Navigation">
         <button
           className={activeTab === 'home' ? 'nav-active' : ''}

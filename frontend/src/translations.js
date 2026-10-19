@@ -225,7 +225,7 @@ export const translations = {
     brandSubtitle: "Your Crop's Health",
     greeting: "Hello, Farmer",
     subtitle: "Your crops, your prosperity.",
-    offlineReady: "System online & ready",
+    offlineReady: "online & ready",
     scanTitle: "Diagnose Soybean Leaf",
     scanSubtitle: "Take or upload a soybean leaf photo for honest diagnosis, pest alerts & safe care",
     openCamera: "Open Camera",
