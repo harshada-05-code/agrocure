@@ -1,0 +1,5 @@
+{
+  "likely_threshold": 0.65,
+  "possible_threshold": 0.35,
+  "description": "Configurable thresholds for AI honesty. Scores >= likely_threshold are 'Likely'. Scores >= possible_threshold and < likely_threshold are 'Possible'. Scores < possible_threshold are 'Not sure'."
+}

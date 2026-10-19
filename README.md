@@ -11,8 +11,9 @@ Backend infrastructure for the **AgroCure** foliar disease diagnosis platform, i
 
 ```
                       +---------------------------------------+
-                      |       React Frontend (Vercel)        |
-                      |     https://agrocure.vercel.app/      |
+                      |       AgroCure React Frontend         |
+                      |   Local: http://localhost:5173        |
+                      |   Cloud: https://agrocure.vercel.app/ |
                       +-------------------+-------------------+
                                           |
                         multipart/form-data (image)
