@@ -30,12 +30,10 @@ export default function VoiceGuide({ text, lang = 'hi', labelPlay = 'Listen', la
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Map UI language code to BCP 47 locale tags
+
     const targetLang = lang === 'mr' ? 'mr-IN' : lang === 'hi' ? 'hi-IN' : 'en-US';
     utterance.lang = targetLang;
 
-    // Search for a matching device voice to guarantee proper accent and pronunciation
     const matchedVoice = voices.find(v => v.lang.replace('_', '-').toLowerCase() === targetLang.toLowerCase())
       || voices.find(v => v.lang.toLowerCase().startsWith(lang));
 
@@ -43,7 +41,7 @@ export default function VoiceGuide({ text, lang = 'hi', labelPlay = 'Listen', la
       utterance.voice = matchedVoice;
     }
 
-    utterance.rate = 0.82; // Slightly slower speed for clearer listening in farm environments
+    utterance.rate = 0.82;
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
@@ -57,13 +55,15 @@ export default function VoiceGuide({ text, lang = 'hi', labelPlay = 'Listen', la
     <button
       onClick={handleToggleSpeech}
       type="button"
-      className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shadow-sm ${
-        isSpeaking 
-          ? 'bg-red-600 text-white animate-pulse' 
-          : 'bg-green-700 text-white hover:bg-green-800'
-      }`}
+      className={`voice-guide-btn${isSpeaking ? ' speaking' : ''}`}
+      aria-pressed={isSpeaking}
+      aria-label={isSpeaking ? labelStop : labelPlay}
     >
-      {isSpeaking ? <Square className="w-4 h-4 fill-current" /> : <Volume2 className="w-4 h-4" />}
+      {isSpeaking ? (
+        <Square className="voice-icon" aria-hidden="true" />
+      ) : (
+        <Volume2 className="voice-icon" aria-hidden="true" />
+      )}
       <span>{isSpeaking ? labelStop : labelPlay}</span>
     </button>
   );

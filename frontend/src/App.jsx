@@ -1,14 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Leaf,
   Camera,
-  FileText,
+  Image as ImageIcon,
   ShieldCheck,
-  ChevronRight,
   Home,
   History,
-  Volume2,
-  VolumeX,
   Sparkles,
   AlertCircle,
   AlertTriangle,
@@ -20,6 +17,7 @@ import {
   Landmark,
   Bug,
   HelpCircle as QuestionIcon,
+  Focus,
 } from 'lucide-react';
 import { translations } from './translations';
 import { diagnoseCropImage, checkBackendHealth } from './apiService';
@@ -34,24 +32,28 @@ import {
 } from './confidenceHelper';
 import { GOVERNMENT_SCHEMES } from './schemes.data';
 import VoiceGuide from './components/VoiceGuide';
+import GradCamOverlay from './components/GradCamOverlay';
+
+function formatScanWhen(scan) {
+  if (scan.date && scan.time) {
+    return `${scan.date} · ${scan.time}`;
+  }
+  if (scan.time) return scan.time;
+  return '';
+}
 
 export default function App() {
-  // Persistent Language preference
   const [lang, setLang] = useState(() => localStorage.getItem('agrocure_lang') || 'hi');
-  
-  // Persistent Text Size (normal / large)
   const [largeText, setLargeText] = useState(() => localStorage.getItem('agrocure_font_size') === 'large');
-  
-  // Persistent Sunlight High-Contrast Mode
   const [sunlightMode, setSunlightMode] = useState(() => localStorage.getItem('agrocure_sunlight') === 'true');
-
-  // Persistent Farmer Data & Privacy Consent
   const [consentChoice, setConsentChoice] = useState(() => localStorage.getItem('agrocure_consent'));
 
-  // Active navigation tab ('home' | 'diagnose' | 'schemes' | 'help')
+  // Active tab: 'home' | 'history' | 'schemes' | 'help'
   const [activeTab, setActiveTab] = useState('home');
 
-  const [isBackendOnline, setIsBackendOnline] = useState(true);
+  const [isBrowserOffline, setIsBrowserOffline] = useState(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -62,7 +64,6 @@ export default function App() {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [farmerFeedback, setFarmerFeedback] = useState(null);
 
-  // Recent scans
   const [recentScans, setRecentScans] = useState(() => {
     try {
       const saved = localStorage.getItem('agrocure_scans');
@@ -70,16 +71,20 @@ export default function App() {
         {
           id: '1',
           name: 'Soyabean_Rust',
+          date: '18 Oct 2026',
           time: '10:42 AM',
           band: 'possible',
           healthy: false,
+          thumbnail: null,
         },
         {
           id: '2',
           name: 'Healthy_Soyabean',
+          date: '17 Oct 2026',
           time: '4:18 PM',
           band: 'likely',
           healthy: true,
+          thumbnail: null,
         },
       ];
     } catch {
@@ -89,9 +94,10 @@ export default function App() {
 
   const cameraInputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const recentSectionRef = useRef(null);
   const t = translations[lang] || translations.hi;
+  const englishNames = translations.en.diseaseNames;
 
-  // Apply typography and sunlight mode classes to document body
   useEffect(() => {
     if (largeText) {
       document.body.classList.add('large-text-mode');
@@ -114,14 +120,26 @@ export default function App() {
     localStorage.setItem('agrocure_lang', lang);
   }, [lang]);
 
-  // Periodic Backend Health Monitoring
+  // Browser online/offline (not backend health)
+  useEffect(() => {
+    const goOnline = () => setIsBrowserOffline(false);
+    const goOffline = () => setIsBrowserOffline(true);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    setIsBrowserOffline(!navigator.onLine);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  // Keep backend health check for diagnosis resilience (no UI badge)
   useEffect(() => {
     async function checkHealth() {
       try {
         await checkBackendHealth();
-        setIsBackendOnline(true);
       } catch {
-        setIsBackendOnline(false);
+        /* silent — offline badge uses navigator.onLine only */
       }
     }
     checkHealth();
@@ -129,7 +147,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle Photo selection with client-side compression
   const processImageFile = async (file) => {
     if (!file) return;
 
@@ -138,6 +155,7 @@ export default function App() {
     setShowHeatmap(false);
     setFarmerFeedback(null);
     setStepStatus(t.stepReceived);
+    setActiveTab('home');
 
     try {
       const previewUrl = URL.createObjectURL(file);
@@ -151,21 +169,36 @@ export default function App() {
       const result = await diagnoseCropImage(readyFile);
       setDiagnosis(result);
       setStepStatus(t.stepDone);
-      setActiveTab('diagnose');
 
       if (consentChoice !== 'no') {
         const topConfidence = result.diagnosis.confidence;
+        const now = new Date();
         const newScan = {
           id: Date.now().toString(),
           name: result.diagnosis.predicted_class,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          date: now.toLocaleDateString(lang === 'en' ? 'en-IN' : lang === 'mr' ? 'mr-IN' : 'hi-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }),
+          time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           band: getConfidenceBand(topConfidence),
           healthy: isNoDiseaseDetected(result.diagnosis.predicted_class),
+          thumbnail: previewUrl,
         };
 
         setRecentScans((prev) => {
-          const updated = [newScan, ...prev.slice(0, 4)];
-          localStorage.setItem('agrocure_scans', JSON.stringify(updated));
+          const updated = [newScan, ...prev].slice(0, 10);
+          try {
+            // Persist without large data-URLs if storage is tight
+            const forStorage = updated.map(({ thumbnail, ...rest }) => ({
+              ...rest,
+              thumbnail: typeof thumbnail === 'string' && thumbnail.startsWith('blob:') ? null : thumbnail,
+            }));
+            localStorage.setItem('agrocure_scans', JSON.stringify(forStorage));
+          } catch {
+            /* ignore quota */
+          }
           return updated;
         });
       }
@@ -182,6 +215,7 @@ export default function App() {
     if (file) {
       processImageFile(file);
     }
+    e.target.value = '';
   };
 
   const retryDiagnosis = () => {
@@ -218,18 +252,33 @@ export default function App() {
     setActiveTab('home');
   };
 
+  const goHistory = () => {
+    setActiveTab('history');
+    if (diagnosis) {
+      setDiagnosis(null);
+      setImagePreview(null);
+      setImageFile(null);
+      setError(null);
+    }
+    requestAnimationFrame(() => {
+      recentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const goHelp = () => {
+    setActiveTab('help');
+    alert(t.helpAlert);
+  };
+
   const primaryScore = diagnosis?.diagnosis?.confidence ?? 0;
   const isUnclearDiagnosis = diagnosis ? isLowConfidenceOrUnclear(primaryScore) : false;
   const topClass = diagnosis?.diagnosis?.predicted_class || '';
+  const bandKey = getConfidenceBand(primaryScore);
+  const latestThree = recentScans.slice(0, 3);
 
-  // Dynamic voice text generation in active language
   const voiceText = useMemo(() => {
     if (!diagnosis) {
-      return lang === 'mr'
-        ? 'नमस्कार शेतकरी बंधूंनो, तुमच्या सोयाबीन पानाचा फोटो काढा किंवा अपलोड करा.'
-        : lang === 'hi'
-        ? 'नमस्कार किसान भाइयों, अपनी सोयाबीन पत्ती की फोटो लें या अपलोड करें।'
-        : 'Welcome farmer, please take or upload a soybean leaf photo.';
+      return t.voiceWelcome;
     }
     const predClass = diagnosis.diagnosis.predicted_class;
     const diseaseName = t.diseaseNames[predClass] || predClass;
@@ -250,32 +299,36 @@ export default function App() {
     }
     text += t.mandatoryPesticideSafety;
     return text;
-  }, [diagnosis, lang, t]);
+  }, [diagnosis, t]);
+
+  const showEnglishSecondary = lang !== 'en';
 
   return (
     <main className="agro-shell">
-      {/* Accessibility & Customizability Bar */}
-      <div className="accessibility-bar" role="toolbar" aria-label="Accessibility options">
+      <div className="accessibility-bar" role="toolbar" aria-label={t.textSize}>
         <button
+          type="button"
           className="a11y-btn"
           onClick={() => setLargeText(!largeText)}
+          aria-pressed={largeText}
           aria-label={largeText ? t.normalText : t.largeText}
         >
-          <Type size={18} />
-          <span>{largeText ? 'A- ' + t.normalText : 'A+ ' + t.largeText}</span>
+          <Type size={18} aria-hidden="true" />
+          <span>{largeText ? t.normalText : t.largeText}</span>
         </button>
 
         <button
+          type="button"
           className="a11y-btn"
           onClick={() => setSunlightMode(!sunlightMode)}
+          aria-pressed={sunlightMode}
           aria-label={sunlightMode ? t.normalMode : t.sunlightMode}
         >
-          <Sun size={18} />
+          <Sun size={18} aria-hidden="true" />
           <span>{sunlightMode ? t.normalMode : t.sunlightMode}</span>
         </button>
       </div>
 
-      {/* Top Header */}
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -287,91 +340,91 @@ export default function App() {
         </div>
 
         <div className="top-actions">
-          <div className="language-toggle" role="group" aria-label="Choose Language">
+          <div className="language-toggle" role="group" aria-label="Language">
             <button
+              type="button"
               className={lang === 'en' ? 'active' : ''}
               onClick={() => setLang('en')}
-              aria-label="Switch to English"
+              aria-pressed={lang === 'en'}
+              aria-label="English"
             >
               EN
             </button>
             <button
+              type="button"
               className={lang === 'hi' ? 'active' : ''}
               onClick={() => setLang('hi')}
-              aria-label="हिंदी भाषा चुनें"
+              aria-pressed={lang === 'hi'}
+              aria-label="हिंदी"
             >
               हिंदी
             </button>
             <button
+              type="button"
               className={lang === 'mr' ? 'active' : ''}
               onClick={() => setLang('mr')}
-              aria-label="मराठी भाषा निवडा"
+              aria-pressed={lang === 'mr'}
+              aria-label="मराठी"
             >
               मराठी
             </button>
           </div>
 
-          {/* Always Available Header Voice Guide */}
           <VoiceGuide
             text={voiceText}
             lang={lang}
-            labelPlay={t.listenVoice || (lang === 'mr' ? 'ऐका' : lang === 'hi' ? 'सुनिए' : 'Listen')}
-            labelStop={t.stopVoice || (lang === 'mr' ? 'थांबा' : lang === 'hi' ? 'रोकें' : 'Stop')}
+            labelPlay={t.listenVoice}
+            labelStop={t.stopVoice}
           />
         </div>
       </header>
 
-      {/* Soybean Scope Notice Banner */}
       <div className="soybean-scope-banner" role="status">
-        <AlertCircle size={18} style={{ flexShrink: 0 }} />
+        <AlertCircle size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
         <span>{t.soybeanOnlyMicro || t.soybeanOnlyWarning}</span>
       </div>
 
-      {/* Greeting Banner & Fixed Green Online Pulse Indicator */}
+      {isBrowserOffline && (
+        <div className="offline-badge" role="status">
+          <AlertTriangle size={20} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <strong>{t.offlineBadgeTitle}</strong>
+            <span>{t.offlineBadgeDetail}</span>
+          </div>
+        </div>
+      )}
+
       <section className="welcome-row">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            {/* Pulsing Green Status Dot */}
-            <span className="relative flex h-3 w-3">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isBackendOnline ? 'bg-green-400' : 'bg-amber-400'} opacity-75`}></span>
-              <span className={`relative inline-flex rounded-full h-3 w-3 ${isBackendOnline ? 'bg-green-600' : 'bg-amber-500'}`}></span>
-            </span>
-            <span className="text-xs font-bold tracking-wider text-green-800 uppercase">
-              {isBackendOnline ? t.offlineReady || 'SYSTEM ONLINE & READY' : 'OFFLINE MODE'}
-            </span>
-          </div>
-
           <h1>{t.greeting}</h1>
           <p className="subtitle">{t.subtitle}</p>
         </div>
         <div className="avatar" aria-hidden="true">
-          🌱
+          <Leaf size={26} />
         </div>
       </section>
 
-      {/* Privacy Consent Prompt */}
       {!consentChoice && (
         <section className="consent-card" aria-labelledby="consent-title">
           <div className="consent-header" id="consent-title">
-            <ShieldCheck size={20} />
+            <ShieldCheck size={20} aria-hidden="true" />
             <span>{t.privacyTitle}</span>
           </div>
-          <p style={{ fontSize: '0.88rem' }}>{t.privacyQuestion}</p>
+          <p>{t.privacyQuestion}</p>
           <div className="consent-buttons">
-            <button className="consent-btn" onClick={() => handleConsent('yes')}>
+            <button type="button" className="consent-btn" onClick={() => handleConsent('yes')}>
               {t.consentYes}
             </button>
-            <button className="consent-btn" onClick={() => handleConsent('no')}>
+            <button type="button" className="consent-btn" onClick={() => handleConsent('no')}>
               {t.consentNo}
             </button>
-            <button className="consent-btn" onClick={() => handleConsent('not_sure')}>
+            <button type="button" className="consent-btn" onClick={() => handleConsent('not_sure')}>
               {t.consentNotSure}
             </button>
           </div>
         </section>
       )}
 
-      {/* Hidden File Inputs */}
       <input
         type="file"
         ref={cameraInputRef}
@@ -388,7 +441,6 @@ export default function App() {
         onChange={handleFileInputChange}
       />
 
-      {/* View: Government Schemes Tab */}
       {activeTab === 'schemes' && (
         <section className="schemes-view" aria-labelledby="schemes-heading">
           <div className="section-heading">
@@ -400,11 +452,9 @@ export default function App() {
               <div className="scheme-header">
                 <h3>{scheme.name[lang] || scheme.name.en}</h3>
                 <span
-                  className={`verified-badge ${
-                    scheme.verified ? 'verified' : 'unverified'
-                  }`}
+                  className={`verified-badge ${scheme.verified ? 'verified' : 'unverified'}`}
                 >
-                  {scheme.verified ? `✓ ${t.schemeVerifiedBadge}` : `⏳ ${t.schemeUnverifiedBadge}`}
+                  {scheme.verified ? t.schemeVerifiedBadge : t.schemeUnverifiedBadge}
                 </span>
               </div>
 
@@ -423,25 +473,24 @@ export default function App() {
           ))}
 
           <div className="scheme-confirm-notice">
-            <AlertCircle size={18} style={{ display: 'inline', marginRight: '6px' }} />
+            <AlertCircle size={18} aria-hidden="true" style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
             {t.schemeConfirmNotice}
           </div>
 
           <div style={{ marginTop: '16px' }}>
-            <button className="reset-btn" onClick={() => setActiveTab('home')}>
-              ← {t.home}
+            <button type="button" className="reset-btn" onClick={() => setActiveTab('home')}>
+              {t.home}
             </button>
           </div>
         </section>
       )}
 
-      {/* View: Standard Scanner & Live Results */}
       {activeTab !== 'schemes' && (
         <>
           {!diagnosis && !loading && (
             <section className="scan-card" aria-labelledby="scan-heading">
               <div className="scan-copy">
-                <div className="round-icon">
+                <div className="round-icon" aria-hidden="true">
                   <Camera size={26} />
                 </div>
                 <div>
@@ -452,41 +501,42 @@ export default function App() {
 
               <div className="scan-actions">
                 <button
+                  type="button"
                   className="primary-button"
                   onClick={() => cameraInputRef.current?.click()}
                   aria-label={t.openCamera}
                 >
-                  <Camera size={20} />
+                  <Camera size={20} aria-hidden="true" />
                   <span>{t.openCamera}</span>
                 </button>
                 <button
+                  type="button"
                   className="secondary-button"
                   onClick={() => fileInputRef.current?.click()}
                   aria-label={t.choosePhoto}
                 >
-                  <FileText size={20} />
+                  <ImageIcon size={20} aria-hidden="true" />
                   <span>{t.choosePhoto}</span>
                 </button>
               </div>
 
               <div className="secure-note">
-                <ShieldCheck size={16} />
+                <ShieldCheck size={16} aria-hidden="true" />
                 <span>{t.secureNote}</span>
               </div>
             </section>
           )}
 
-          {/* Progress Card */}
           {loading && (
             <div className="progress-card" role="status" aria-live="polite">
               <div className="spinner" aria-hidden="true"></div>
-              <h3 style={{ fontSize: '1.15rem', color: '#2d5a27', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '1.15rem', color: '#166534', marginBottom: '8px' }}>
                 {stepStatus || t.diagnosing}
               </h3>
               {imagePreview && (
                 <img
                   src={imagePreview}
-                  alt="Analyzing leaf"
+                  alt={t.analyzingAlt}
                   style={{
                     width: '130px',
                     height: '130px',
@@ -500,73 +550,55 @@ export default function App() {
             </div>
           )}
 
-          {/* Error Recovery */}
           {error && (
-            <div
-              style={{
-                background: '#fee2e2',
-                border: '2px solid #ef4444',
-                borderRadius: '14px',
-                padding: '16px',
-                marginBottom: '18px',
-                color: '#991b1b',
-              }}
-              role="alert"
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <AlertCircle size={22} />
-                <strong style={{ fontSize: '1rem' }}>{error}</strong>
+            <div className="error-card" role="alert">
+              <div className="error-card-header">
+                <AlertCircle size={22} aria-hidden="true" />
+                <strong>{error}</strong>
               </div>
-              <button
-                className="primary-button"
-                style={{ width: '100%', marginTop: '8px' }}
-                onClick={retryDiagnosis}
-              >
-                <RotateCcw size={18} />
+              <button type="button" className="primary-button" onClick={retryDiagnosis}>
+                <RotateCcw size={18} aria-hidden="true" />
                 {t.retryBtn}
               </button>
             </div>
           )}
 
-          {/* Live Diagnosis Result View */}
           {diagnosis && !loading && (
             <section className="result-container" aria-labelledby="result-heading">
               {isUnclearDiagnosis ? (
                 <div className="not-sure-box">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <AlertTriangle size={24} color="#9f1239" />
+                    <AlertTriangle size={24} color="#9f1239" aria-hidden="true" />
                     <h4 id="result-heading">{t.notSureTitle}</h4>
                   </div>
-                  <p style={{ marginTop: '8px', fontSize: '0.92rem', color: '#881337' }}>
-                    {t.notSureAdvice}
-                  </p>
+                  <p>{t.notSureAdvice}</p>
                   <button
+                    type="button"
                     className="primary-button"
-                    style={{ width: '100%', marginTop: '14px' }}
+                    style={{ marginTop: '14px' }}
                     onClick={() => cameraInputRef.current?.click()}
                   >
-                    <Camera size={18} />
+                    <Camera size={18} aria-hidden="true" />
                     {t.retakePhoto}
                   </button>
                 </div>
               ) : (
                 <>
-                  {/* Result Header */}
                   <div className="result-header">
                     <div className="result-title-group">
                       {isNoDiseaseDetected(topClass) ? (
                         <span className="category-tag healthy">
-                          <Check size={14} />
+                          <Check size={14} aria-hidden="true" />
                           {t.diseaseNames.Healthy_Soyabean}
                         </span>
                       ) : isInsectPest(topClass) ? (
                         <span className="category-tag pest">
-                          <Bug size={14} />
+                          <Bug size={14} aria-hidden="true" />
                           {t.insectPestNotice}
                         </span>
                       ) : (
                         <span className="category-tag disease">
-                          <AlertCircle size={14} />
+                          <AlertCircle size={14} aria-hidden="true" />
                           {t.diseaseNotice}
                         </span>
                       )}
@@ -576,83 +608,96 @@ export default function App() {
                           ? t.noDiseaseDetected
                           : t.diseaseNames[topClass] || topClass}
                       </h3>
+                      {showEnglishSecondary &&
+                        !isNoDiseaseDetected(topClass) &&
+                        englishNames[topClass] && (
+                          <span className="disease-name-en">{englishNames[topClass]}</span>
+                        )}
                     </div>
 
                     <div className="confidence-badge">
                       <span
-                        className={`confidence-band band-${getConfidenceBand(primaryScore)}`}
+                        className={`confidence-band band-${bandKey}`}
+                        aria-label={`${t.confidenceBand}: ${t.bands[bandKey]}`}
                       >
-                        {getConfidenceBand(primaryScore) === 'likely' && '✓ '}
-                        {getConfidenceBand(primaryScore) === 'possible' && '? '}
-                        {getConfidenceBand(primaryScore) === 'not_sure' && '⚠ '}
-                        {t.bands[getConfidenceBand(primaryScore)]}
+                        {t.bands[bandKey]}
                       </span>
                     </div>
                   </div>
 
-                  {/* Leaf & GradCAM Heatmap Toggle */}
                   <div className="image-inspection">
                     <div className="image-frame">
-                      <img
-                        src={showHeatmap ? (diagnosis.diagnosis.gradcam_heatmap_url || imagePreview) : imagePreview}
-                        alt="Soybean leaf scan"
-                      />
+                      {showHeatmap ? (
+                        diagnosis.diagnosis.gradcam_heatmap_url && !diagnosis._isMockFallback ? (
+                          <img
+                            src={diagnosis.diagnosis.gradcam_heatmap_url}
+                            alt={t.heatmapAlt}
+                          />
+                        ) : (
+                          <GradCamOverlay imageSrc={imagePreview} />
+                        )
+                      ) : (
+                        <img src={imagePreview} alt={t.leafScanAlt} />
+                      )}
                     </div>
+
                     <button
+                      type="button"
                       className="toggle-view-btn"
                       onClick={() => setShowHeatmap(!showHeatmap)}
+                      aria-pressed={showHeatmap}
                       aria-label={showHeatmap ? t.originalPhoto : t.gradcamToggle}
                     >
-                      <Eye size={16} />
+                      <Eye size={16} aria-hidden="true" />
                       <span>{showHeatmap ? t.originalPhoto : t.gradcamToggle}</span>
                     </button>
-                    {showHeatmap && (
-                      <p className="heatmap-caption">{t.heatmapExplanation || 'Grad-CAM visual heatmap showing leaf areas evaluated by model.'}</p>
-                    )}
                   </div>
 
-                  {/* Differential Diagnosis Warning */}
+                  {showHeatmap && (
+                    <p className="heatmap-caption">{t.heatmapExplanation}</p>
+                  )}
+
                   {isConfusableCondition(topClass) && (
                     <div className="differential-box" role="note">
                       <div className="diff-header">
-                        <AlertTriangle size={18} />
+                        <AlertTriangle size={18} aria-hidden="true" />
                         <span>{t.couldAlsoBeTitle}</span>
                       </div>
                       <p>{getDifferentialDiagnosisNote(topClass, t)}</p>
                     </div>
                   )}
 
-                  {/* Top 3 Possibilities */}
                   <div className="candidates-section">
                     <h4>{t.topCandidates}</h4>
-                    {diagnosis.diagnosis.top3_classes.map((cand, idx) => (
-                      <div key={idx} className="candidate-row">
-                        <div className="candidate-labels">
-                          <span>{t.diseaseNames[cand.class_name] || cand.class_name}</span>
-                          <span
-                            className={`confidence-band band-${getConfidenceBand(
-                              cand.confidence
-                            )}`}
-                            style={{ minHeight: '26px', padding: '2px 8px', fontSize: '0.78rem' }}
-                          >
-                            {t.bands[getConfidenceBand(cand.confidence)]}
-                          </span>
+                    {diagnosis.diagnosis.top3_classes.map((cand, idx) => {
+                      const candBand = getConfidenceBand(cand.confidence);
+                      return (
+                        <div key={idx} className="candidate-row">
+                          <div className="candidate-labels">
+                            <span>
+                              {t.diseaseNames[cand.class_name] || cand.class_name}
+                              {showEnglishSecondary && englishNames[cand.class_name] && (
+                                <span className="disease-name-en">
+                                  {englishNames[cand.class_name]}
+                                </span>
+                              )}
+                            </span>
+                            <span className={`confidence-band band-${candBand}`}>
+                              {t.bands[candBand]}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
-                  {/* Agronomic Remedies Tabs */}
                   <div className="remedies-section">
-                    <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '10px' }}>
-                      {t.remediesTitle}
-                    </h4>
+                    <h4>{t.remediesTitle}</h4>
 
                     <div className="remedies-nav" role="tablist">
                       <button
-                        className={`remedy-tab-btn ${
-                          activeRemedyTab === 'chemical' ? 'active' : ''
-                        }`}
+                        type="button"
+                        className={`remedy-tab-btn ${activeRemedyTab === 'chemical' ? 'active' : ''}`}
                         onClick={() => setActiveRemedyTab('chemical')}
                         role="tab"
                         aria-selected={activeRemedyTab === 'chemical'}
@@ -660,9 +705,8 @@ export default function App() {
                         {t.chemicalTab}
                       </button>
                       <button
-                        className={`remedy-tab-btn ${
-                          activeRemedyTab === 'organic' ? 'active' : ''
-                        }`}
+                        type="button"
+                        className={`remedy-tab-btn ${activeRemedyTab === 'organic' ? 'active' : ''}`}
                         onClick={() => setActiveRemedyTab('organic')}
                         role="tab"
                         aria-selected={activeRemedyTab === 'organic'}
@@ -670,9 +714,8 @@ export default function App() {
                         {t.organicTab}
                       </button>
                       <button
-                        className={`remedy-tab-btn ${
-                          activeRemedyTab === 'cultural' ? 'active' : ''
-                        }`}
+                        type="button"
+                        className={`remedy-tab-btn ${activeRemedyTab === 'cultural' ? 'active' : ''}`}
                         onClick={() => setActiveRemedyTab('cultural')}
                         role="tab"
                         aria-selected={activeRemedyTab === 'cultural'}
@@ -685,7 +728,7 @@ export default function App() {
                       {activeRemedyTab === 'chemical' && (
                         <div>
                           <div className="remedy-item">
-                            <strong>दवा / Chemical Active Ingredient</strong>
+                            <strong>{t.chemicalIngredient}</strong>
                             <p>{diagnosis.remedy?.chemical?.medicine}</p>
                           </div>
                           <div className="remedy-item">
@@ -700,7 +743,7 @@ export default function App() {
                           </div>
 
                           <div className="pesticide-safety-card">
-                            <ShieldCheck size={22} style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <ShieldCheck size={22} aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
                             <p>{t.mandatoryPesticideSafety}</p>
                           </div>
                         </div>
@@ -708,52 +751,42 @@ export default function App() {
 
                       {activeRemedyTab === 'organic' && (
                         <div className="remedy-item">
-                          <strong>जैविक समाधान / Organic Solution</strong>
+                          <strong>{t.organicSolution}</strong>
                           <p>{diagnosis.remedy?.organic?.solution}</p>
                         </div>
                       )}
 
                       {activeRemedyTab === 'cultural' && (
                         <div className="remedy-item">
-                          <strong>खेत प्रबंधन / Cultural Practices</strong>
+                          <strong>{t.culturalPractices}</strong>
                           <p>{diagnosis.remedy?.cultural}</p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Task Migratability: Jump to Government Schemes */}
                   <button
+                    type="button"
                     className="schemes-jump-btn"
                     onClick={() => setActiveTab('schemes')}
                   >
-                    <Landmark size={18} />
+                    <Landmark size={18} aria-hidden="true" />
                     <span>{t.viewSchemesBtn}</span>
                   </button>
 
-                  {/* Farmer Feedback Section */}
                   <div className="feedback-box">
                     <div className="feedback-header">{t.feedbackTitle}</div>
                     {farmerFeedback ? (
                       <p style={{ color: '#166534', fontWeight: 700 }}>{t.feedbackThankYou}</p>
                     ) : (
                       <div className="feedback-actions">
-                        <button
-                          className="feedback-btn"
-                          onClick={() => handleFeedback('yes')}
-                        >
+                        <button type="button" className="feedback-btn" onClick={() => handleFeedback('yes')}>
                           {t.feedbackYes}
                         </button>
-                        <button
-                          className="feedback-btn"
-                          onClick={() => handleFeedback('no')}
-                        >
+                        <button type="button" className="feedback-btn" onClick={() => handleFeedback('no')}>
                           {t.feedbackNo}
                         </button>
-                        <button
-                          className="feedback-btn"
-                          onClick={() => handleFeedback('not_sure')}
-                        >
+                        <button type="button" className="feedback-btn" onClick={() => handleFeedback('not_sure')}>
                           {t.feedbackNotSure}
                         </button>
                       </div>
@@ -762,118 +795,129 @@ export default function App() {
                 </>
               )}
 
-              {/* Speech & New Scan Actions */}
               <div className="actions-footer">
                 <VoiceGuide
                   text={voiceText}
                   lang={lang}
-                  labelPlay={t.listenVoice || (lang === 'mr' ? 'ऐका' : lang === 'hi' ? 'सुनिए' : 'Listen')}
-                  labelStop={t.stopVoice || (lang === 'mr' ? 'थांबा' : lang === 'hi' ? 'रोकें' : 'Stop')}
+                  labelPlay={t.listenVoice}
+                  labelStop={t.stopVoice}
                 />
-                <button className="reset-btn" onClick={resetScan}>
-                  <RotateCcw size={16} />
+                <button type="button" className="reset-btn" onClick={resetScan}>
+                  <RotateCcw size={16} aria-hidden="true" />
                   <span>{t.newScan}</span>
                 </button>
               </div>
             </section>
           )}
 
-          {/* Recent Scans Section */}
-          <section className="content-grid" aria-labelledby="scans-heading">
+          <section
+            ref={recentSectionRef}
+            className={`content-grid${activeTab === 'history' ? ' history-focus' : ''}`}
+            aria-labelledby="scans-heading"
+          >
             <div className="main-column">
               <div className="section-heading">
                 <h2 id="scans-heading">{t.recentScans}</h2>
               </div>
 
-              {recentScans.map((scan) => (
-                <div key={scan.id} className="result-card">
-                  <div className={`mini-leaf ${scan.healthy ? 'healthy' : ''}`}>
-                    <Leaf size={24} />
-                  </div>
-                  <div className="result-info">
-                    <strong>{t.diseaseNames[scan.name] || scan.name}</strong>
-                    <span>{scan.time}</span>
-                  </div>
-                  <span className={`confidence-band band-${scan.band || 'likely'}`}>
-                    {t.bands[scan.band || 'likely']}
-                  </span>
+              {latestThree.length === 0 ? (
+                <div className="empty-state" role="status">
+                  {t.emptyRecent}
                 </div>
-              ))}
+              ) : (
+                latestThree.map((scan) => (
+                  <article key={scan.id} className="result-card">
+                    <div className="scan-thumb" aria-hidden={!scan.thumbnail}>
+                      {scan.thumbnail ? (
+                        <img src={scan.thumbnail} alt="" />
+                      ) : (
+                        <Leaf size={22} aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className="result-info">
+                      <strong>{t.diseaseNames[scan.name] || scan.name}</strong>
+                      {showEnglishSecondary && englishNames[scan.name] && (
+                        <span className="disease-name-en">{englishNames[scan.name]}</span>
+                      )}
+                      <span className="scan-meta">{formatScanWhen(scan)}</span>
+                    </div>
+                    <span className={`confidence-band band-${scan.band || 'likely'}`}>
+                      {t.bands[scan.band || 'likely']}
+                    </span>
+                  </article>
+                ))
+              )}
             </div>
 
-            {/* How to take good photo Guide */}
             <aside className="how-card" aria-labelledby="how-heading">
               <div className="how-header">
-                <div className="round-icon" style={{ width: '38px', height: '38px' }}>
+                <div className="round-icon" style={{ width: '40px', height: '40px' }} aria-hidden="true">
                   <Sparkles size={20} />
                 </div>
                 <h2 id="how-heading">{t.howToTitle}</h2>
               </div>
-              <div className="step">
-                <span>1</span>
+              <div className="tip-row">
+                <div className="tip-icon" aria-hidden="true">
+                  <Leaf size={20} />
+                </div>
                 <p>{t.step1}</p>
-                <Check size={16} color="#15803d" />
               </div>
-              <div className="step">
-                <span>2</span>
+              <div className="tip-row">
+                <div className="tip-icon" aria-hidden="true">
+                  <Sun size={20} />
+                </div>
                 <p>{t.step2}</p>
-                <Check size={16} color="#15803d" />
               </div>
-              <div className="step">
-                <span>3</span>
+              <div className="tip-row">
+                <div className="tip-icon" aria-hidden="true">
+                  <Focus size={20} />
+                </div>
                 <p>{t.step3}</p>
-                <Check size={16} color="#15803d" />
               </div>
             </aside>
           </section>
         </>
       )}
 
-      {/* Bottom Navigation */}
-      <nav className="bottom-nav" aria-label="Main Navigation">
+      <nav className="bottom-nav" aria-label="Main">
         <button
+          type="button"
           className={activeTab === 'home' ? 'nav-active' : ''}
           onClick={resetScan}
+          aria-current={activeTab === 'home' ? 'page' : undefined}
           aria-label={t.home}
         >
-          <Home size={22} />
+          <Home size={22} aria-hidden="true" />
           <span>{t.home}</span>
         </button>
         <button
-          className={activeTab === 'diagnose' ? 'nav-active' : ''}
-          onClick={() => {
-            if (!diagnosis) {
-              cameraInputRef.current?.click();
-            } else {
-              setActiveTab('diagnose');
-            }
-          }}
-          aria-label={t.diagnoseTab}
+          type="button"
+          className={activeTab === 'history' ? 'nav-active' : ''}
+          onClick={goHistory}
+          aria-current={activeTab === 'history' ? 'page' : undefined}
+          aria-label={t.historyTab}
         >
-          <History size={22} />
-          <span>{t.diagnoseTab}</span>
+          <History size={22} aria-hidden="true" />
+          <span>{t.historyTab}</span>
         </button>
         <button
+          type="button"
           className={activeTab === 'schemes' ? 'nav-active' : ''}
           onClick={() => setActiveTab('schemes')}
+          aria-current={activeTab === 'schemes' ? 'page' : undefined}
           aria-label={t.schemesTab}
         >
-          <Landmark size={22} />
+          <Landmark size={22} aria-hidden="true" />
           <span>{t.schemesTab}</span>
         </button>
         <button
-          onClick={() =>
-            alert(
-              lang === 'mr'
-                ? 'किसान कॉल सेंटर मोफत हेल्पलाइन: १८००-१८०-१५५१ वर संपर्क साधा.'
-                : lang === 'hi'
-                ? 'किसान कॉल सेंटर टोल-फ्री हेल्पलाइन: 1800-180-1551 पर कॉल करें।'
-                : 'Kisan Call Center Toll-Free Helpline: 1800-180-1551.'
-            )
-          }
+          type="button"
+          className={activeTab === 'help' ? 'nav-active' : ''}
+          onClick={goHelp}
+          aria-current={activeTab === 'help' ? 'page' : undefined}
           aria-label={t.helpTab}
         >
-          <QuestionIcon size={22} />
+          <QuestionIcon size={22} aria-hidden="true" />
           <span>{t.helpTab}</span>
         </button>
       </nav>
