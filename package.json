@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "AgroCure Backend Infrastructure - NestJS Gateway & FastAPI ML Engine",
   "scripts": {
+    "build": "node build.js",
     "start": "node run-concurrent.js",
     "start:bash": "bash start.sh",
     "start:frontend": "cd frontend && npm run dev",
