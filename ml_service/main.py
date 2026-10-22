@@ -376,6 +376,64 @@ async def classify_foliar(file: UploadFile = File(...)):
     )
 
 
+# ---------------------------------------------------------------------------
+# Direct /predict endpoint supporting standard JSON response
+# ---------------------------------------------------------------------------
+@app.post("/predict")
+async def predict_endpoint(file: UploadFile = File(...)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Uploaded file must be a valid image.")
+
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
+
+    probs, activation_map, model_type = _infer_with_svc(image)
+
+    sorted_idx = np.argsort(probs)[::-1]
+    top_idx = int(sorted_idx[0])
+    confidence = float(round(float(probs[top_idx]), 4))
+
+    if confidence >= 0.75:
+        band = "Likely"
+        band_class = "likely"
+        confidence_band = "HIGH"
+    elif confidence >= 0.45:
+        band = "Possible"
+        band_class = "possible"
+        confidence_band = "MODERATE"
+    else:
+        band = "Not sure"
+        band_class = "notsure"
+        confidence_band = "LOW"
+
+    top3 = [
+        {"class_name": CLASSES[int(i)], "confidence": float(round(float(probs[int(i)]), 4))}
+        for i in sorted_idx[:3]
+    ]
+
+    heatmap_id = f"gradcam_{uuid.uuid4().hex[:10]}.jpg"
+    heatmap_rel = _generate_heatmap(image, activation_map, heatmap_id)
+    base_url = os.environ.get("ML_SERVICE_URL", "http://localhost:8000")
+    gradcam_url = f"{base_url}{heatmap_rel}"
+
+    return {
+        "status": "success",
+        "diagnosis": {
+            "predicted_class": CLASSES[top_idx],
+            "confidence": confidence,
+            "band": band,
+            "band_class": band_class,
+            "confidence_band": confidence_band,
+            "top3_classes": top3,
+            "gradcam_heatmap_url": gradcam_url,
+            "model_type": model_type
+        }
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

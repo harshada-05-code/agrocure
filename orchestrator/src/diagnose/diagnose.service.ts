@@ -79,20 +79,39 @@ export class DiagnoseService {
         contentType: file.mimetype || 'image/jpeg',
       });
 
-      const response = await firstValueFrom(
-        this.httpService.post<MLClassificationResult>(
-          `${this.mlServiceUrl}/api/v1/ml/classify-foliar`,
-          formData,
-          {
-            headers: {
-              ...formData.getHeaders(),
+      // Try /predict first, fallback to /api/v1/ml/classify-foliar if needed
+      let mlResult: MLClassificationResult;
+      try {
+        const response = await firstValueFrom(
+          this.httpService.post<any>(
+            `${this.mlServiceUrl}/predict`,
+            formData,
+            {
+              headers: {
+                ...formData.getHeaders(),
+              },
+              timeout: 10000,
             },
-            timeout: 10000,
-          },
-        ),
-      );
+          ),
+        );
+        mlResult = response.data.diagnosis || response.data;
+      } catch (predictErr) {
+        // Fallback to /api/v1/ml/classify-foliar
+        const response = await firstValueFrom(
+          this.httpService.post<MLClassificationResult>(
+            `${this.mlServiceUrl}/api/v1/ml/classify-foliar`,
+            formData,
+            {
+              headers: {
+                ...formData.getHeaders(),
+              },
+              timeout: 10000,
+            },
+          ),
+        );
+        mlResult = response.data;
+      }
 
-      const mlResult = response.data;
       const remedy = getRemedyForCondition(mlResult.predicted_class);
 
       return {
