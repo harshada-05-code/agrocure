@@ -34,6 +34,46 @@ export const translations = {
       "Soyabean_Rust": "Soybean Rust",
       "Soyabean_Spectoria_Brown_Spot": "Septoria Brown Spot"
     },
+    remedies: {
+      sectionTitle: "Treatment & Advisory",
+      organicTitle: "Organic Treatment",
+      chemicalTitle: "Chemical Treatment",
+      preventionTitle: "Prevention & Care",
+      pesticideCaution: "Caution: Follow product label strictly, wear protective gear, and confirm with your local KVK or Agriculture Office.",
+      noneNeeded: "No chemical fungicide required. Maintain healthy crop nutrition and weed management."
+    },
+    diseaseRemedies: {
+      "Soyabean_Rust": {
+        organic: "Spray 5% Neem Seed Kernel Extract (NSKE) or neem oil (3-5 ml/L) at early symptom appearance.",
+        chemical: "Apply Hexaconazole 5% EC or Tebuconazole 25.9% EC. Check product label for approved dosage and safety intervals.",
+        prevention: "Maintain 45 cm row spacing for canopy aeration, avoid overhead irrigation, and inspect lower leaves weekly."
+      },
+      "Soyabean_Frog_Leaf_Eye": {
+        organic: "Apply Trichoderma harzianum or bio-fungicide formulations on affected foliage.",
+        chemical: "Use Carbendazim 50% WP or Azoxystrobin 23% SC strictly as per container label instructions.",
+        prevention: "Use certified disease-free seeds, practice crop rotation with non-legume crops, and destroy infected crop residue."
+      },
+      "Soyabean_Spectoria_Brown_Spot": {
+        organic: "Spray bio-control agent Pseudomonas fluorescens (5 g/L) or neem extract in early stages.",
+        chemical: "Apply Mancozeb 75% WP or Pyraclostrobin 20% WG as per registered product directions.",
+        prevention: "Ensure good field drainage, avoid working in wet fields, and practice at least 2-year crop rotation."
+      },
+      "Soyabean_Mosaic": {
+        organic: "Spray neem oil (5 ml/L) or install yellow sticky traps to control aphid and whitefly vectors.",
+        chemical: "Spray systemic insecticide (e.g., Thiamethoxam 25% WG) to manage vector insects; no direct curative chemical exists for viral infection.",
+        prevention: "Rogue out infected stunted plants immediately, use virus-resistant seeds, and keep field borders weed-free."
+      },
+      "Caterpillar and Semilooper Pest Attack": {
+        organic: "Install pheromone traps (5-10 per acre) and spray Bacillus thuringiensis (Bt) or NSKE 5%.",
+        chemical: "Apply Chlorantraniliprole 18.5% SC or Emamectin Benzoate 5% SG strictly following product label guidelines.",
+        prevention: "Conduct bird perches (10-15 per acre) in field, destroy egg masses on leaf undersides, and monitor weekly."
+      },
+      "Healthy_Soyabean": {
+        organic: "Apply balanced vermicompost and cow-dung manure for sustained root health.",
+        chemical: "No chemical treatment needed. Avoid unnecessary chemical spraying.",
+        prevention: "Continue regular crop inspection, maintain clean irrigation channels, and test soil nutrient balance."
+      }
+    },
     schemes: {
       question: "Question",
       back: "Back",
@@ -104,6 +144,46 @@ export const translations = {
       "Soyabean_Rust": "सोयाबीन गेरुई",
       "Soyabean_Spectoria_Brown_Spot": "सेप्टोरिया भूरा धब्बा"
     },
+    remedies: {
+      sectionTitle: "उपचार एवं कृषि सलाह",
+      organicTitle: "जैविक उपचार",
+      chemicalTitle: "रासायनिक उपचार",
+      preventionTitle: "बचाव और सावधानी",
+      pesticideCaution: "सावधानी: उत्पाद के डिब्बे पर दिए गए लेबल निर्देशों का कड़ाई से पालन करें, सुरक्षा किट पहनें और KVK या कृषि अधिकारी से पुष्टि करें।",
+      noneNeeded: "रासायनिक फफूंदनाशक की आवश्यकता नहीं है। नियमित पोषण व खरपतवार प्रबंधन बनाए रखें।"
+    },
+    diseaseRemedies: {
+      "Soyabean_Rust": {
+        organic: "शुरुआती लक्षण दिखने पर 5% नीम बीज अर्क (NSKE) या नीम का तेल (3-5 मिली/लीटर) का छिड़काव करें।",
+        chemical: "हेक्साकोनाज़ोल 5% EC या टेबुकोनाज़ोल 25.9% EC का छिड़काव करें। उत्पाद लेबल से अनुमोदित मात्रा की पुष्टि करें।",
+        prevention: "हवा के संचार हेतु कतारों के बीच 45 सेमी दूरी रखें, निचले पत्तों की नियमित जांच करें।"
+      },
+      "Soyabean_Frog_Leaf_Eye": {
+        organic: "ट्राइकोडर्मा हरजिएनम या जैव कवकनाशी का घोल पत्तों पर छिड़कें।",
+        chemical: "कार्बेंडाजिम 50% WP या एजोक्सीस्ट्रोबिन 23% SC का प्रयोग लेबल निर्देशानुसार करें।",
+        prevention: "प्रमाणित रोगमुक्त बीज बोएं, गैर-दलहनी फसलों के साथ फसल चक्र अपनाएं और अवशेष नष्ट करें।"
+      },
+      "Soyabean_Spectoria_Brown_Spot": {
+        organic: "स्यूडोमोनास फ्लोरेसेंस (5 ग्राम/लीटर) या नीम अर्क का शुरुआती अवस्था में छिड़काव करें।",
+        chemical: "मेंकोजेब 75% WP या पाइराक्लोस्ट्रोबिन 20% WG का प्रयोग उत्पाद लेबल अनुसार करें।",
+        prevention: "खेत में उचित जल निकासी रखें, गीले खेत में काम करने से बचें और 2 वर्षीय फसल चक्र अपनाएं।"
+      },
+      "Soyabean_Mosaic": {
+        organic: "माहू और सफेद मक्खी कीट नियंत्रण हेतु नीम का तेल (5 मिली/लीटर) या पीले चिपचिपे ट्रैप लगाएं।",
+        chemical: "रस चूसक कीटों के लिए प्रणालीगत कीटनाशक (जैसे थायमेथोक्सम 25% WG) का छिड़काव करें; वायरस के लिए सीधा रासायनिक उपचार नहीं होता।",
+        prevention: "संक्रमित बौने पौधों को तुरंत उखाड़कर नष्ट करें और रोग प्रतिरोधी बीज का उपयोग करें।"
+      },
+      "Caterpillar and Semilooper Pest Attack": {
+        organic: "फेरोमोन ट्रैप (5-10 प्रति एकड़) लगाएं और बीटी (Bacillus thuringiensis) या NSKE 5% का छिड़काव करें।",
+        chemical: "क्लोरेंट्रानिलिप्रोल 18.5% SC या इमामेक्टिन बेंजोएट 5% SG का प्रयोग उत्पाद लेबल के अनुसार करें।",
+        prevention: "खेत में 10-15 बर्ड पर्च (पक्षी बैठने के अड्डे) लगाएं और पत्तों के नीचे अंडों के समूह को नष्ट करें।"
+      },
+      "Healthy_Soyabean": {
+        organic: "जड़ों के स्वास्थ्य हेतु संतुलित वर्मीकम्पोस्ट व गोबर खाद का उपयोग करें।",
+        chemical: "किसी रासायनिक दवा की आवश्यकता नहीं है। अनावश्यक छिड़काव से बचें।",
+        prevention: "खेत का नियमित निरीक्षण करते रहें और संतुलित पोषण (NPK) प्रदान करें।"
+      }
+    },
     schemes: {
       question: "प्रश्न",
       back: "पीछे",
@@ -173,6 +253,46 @@ export const translations = {
       "Soyabean_Mosaic": "सोयाबीन मोझॅक विषाणू",
       "Soyabean_Rust": "सोयाबीन तांबेरा रोग",
       "Soyabean_Spectoria_Brown_Spot": "सेप्टोरिया तपकिरी ठिपके"
+    },
+    remedies: {
+      sectionTitle: "उपाय व कृषी सल्ला",
+      organicTitle: "जैविक उपाय",
+      chemicalTitle: "रासायनिक उपाय",
+      preventionTitle: "प्रतिबंधात्मक काळजी",
+      pesticideCaution: "सावधगिरी: औषधाच्या बाटलीवरील लेबल व सूचनांचे काटेकोर पालन करा, सुरक्षा किट वापरा आणि कृषी केंद्राकडून खात्री करा.",
+      noneNeeded: "कोणत्याही रासायनिक औषधाची गरज नाही. नियमित खत व तण व्यवस्थापन ठेवा."
+    },
+    diseaseRemedies: {
+      "Soyabean_Rust": {
+        organic: "सुरुवातीला ५% निंबोळी अर्क (NSKE) किंवा कडुलिंबाचे तेल (३-५ मिली/लिटर) फवारावे.",
+        chemical: "हेक्साकोनाझोल ५% EC किंवा टेबुकोनाझोल २५.९% EC चा वापर करा. अधिकृत प्रमाणासाठी बाटलीवरील लेबल पाहा.",
+        prevention: "हवा खेळती राहण्यासाठी ओळींमध्ये ४५ सेमी अंतर ठेवा आणि पानाच्या खालच्या भागाची नियमित पाहणी करा."
+      },
+      "Soyabean_Frog_Leaf_Eye": {
+        organic: "ट्रायकोडर्मा हरझियानम किंवा जैविक बुरशीनाशकाची पानावरील फवारणी करा.",
+        chemical: "कार्बेन्डाझिम ५०% WP किंवा अझॉक्सीस्ट्रॉबीन २३% SC उत्पादनाच्या लेबल सूचनेनुसार वापरा.",
+        prevention: "प्रमाणित व निरोगी बियाणे वापरा, पिकांची फेरपालट करा आणि रोगट अवशेष शेतातून काढून टाका."
+      },
+      "Soyabean_Spectoria_Brown_Spot": {
+        organic: "स्यूडोमोनास फ्लोरेसेन्स (५ ग्रॅम/लिटर) किंवा निंबोळी अर्काची सुरुवातीच्या टप्प्यात फवारणी करा.",
+        chemical: "मॅन्कोझेब ७५% WP किंवा पायराक्लोस्ट्रॉबीन २०% WG चा वापर उत्पादक लेबलनुसार करा.",
+        prevention: "शेतात पाण्याचा निचरा योग्य ठेवा, ओल्या शेतात काम करणे टाळा आणि २ वर्षांची पीक फेरपालट करा."
+      },
+      "Soyabean_Mosaic": {
+        organic: "मावा व पांढरी माशीच्या नियंत्रणासाठी निंबोळी तेल (५ मिली/लिटर) किंवा पिवळे चिकट सापळे लावा.",
+        chemical: "रसशोषक किडींसाठी आंतरप्रवाही कीटकनाशक (उदा. थायामेथोक्साम २५% WG) फवारावे; विषाणूवर थेट रासायनिक उपाय नसतो.",
+        prevention: "रोगट खुजी झाडे त्वरित उपटून नष्ट करा आणि विषाणू-प्रतिरोधक वाणांची निवड करा."
+      },
+      "Caterpillar and Semilooper Pest Attack": {
+        organic: "कामगंध सापळे (प्रति एकरी ५-१०) लावा आणि बीटी (Bacillus thuringiensis) किंवा निंबोळी अर्काची फवारणी करा.",
+        chemical: "क्लोरांट्रानिलीप्रोल १८.५% SC किंवा इमामेक्टिन बेन्झोएट ५% SG चा वापर लेबलनुसार करा.",
+        prevention: "शेतात एकरी १०-१५ पक्षी थांबे (T-आकार) उभारा आणि पानाच्या मागील बाजूवरील अंड्यांचे पुंजके नष्ट करा."
+      },
+      "Healthy_Soyabean": {
+        organic: "पिकाच्या आरोग्यासाठी संतुलित गांडूळ खत व शेणखताचा वापर करा.",
+        chemical: "कोणत्याही रासायनिक फवारणीची गरज नाही. अनावश्यक फवारणी टाळा.",
+        prevention: "नियमित पीक पाहणी सुरू ठेवा आणि जमिनीतील अन्नद्रव्यांचे संतुलन राखा."
+      }
     },
     schemes: {
       question: "प्रश्न",

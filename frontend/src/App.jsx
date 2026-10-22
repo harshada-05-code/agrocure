@@ -15,6 +15,9 @@ import {
   AlertTriangle,
   HelpCircle as QuestionIcon,
   PhoneCall,
+  ShieldCheck,
+  FlaskConical,
+  Sprout,
 } from 'lucide-react';
 import { translations } from './translations';
 import { diagnoseCropImage } from './apiService';
@@ -137,8 +140,11 @@ export default function App() {
         ? 'नमस्कार किसान भाइयों, अपनी सोयाबीन पत्ती की फोटो लें या अपलोड करें।'
         : 'Welcome farmer, please take or upload a soybean leaf photo.';
     }
-    const predClass = diagnosis.diagnosis?.predicted_class || 'Leaf Disease';
-    return `${t.greeting}. Diagnosis: ${predClass.replace(/_/g, ' ')}.`;
+    const predClass = diagnosis.diagnosis?.predicted_class || 'Healthy_Soyabean';
+    const diseaseLabel = t.diseaseNames?.[predClass] || predClass.replace(/_/g, ' ');
+    const rec = t.diseaseRemedies?.[predClass];
+    const recSummary = rec ? ` ${t.remedies?.organicTitle}: ${rec.organic}. ${t.remedies?.preventionTitle}: ${rec.prevention}` : '';
+    return `${t.greeting}. ${diseaseLabel}.${recSummary}`;
   }, [diagnosis, lang, t]);
 
   return (
@@ -258,6 +264,59 @@ export default function App() {
                     {showHeatmap ? (t.viewOriginal || 'View original photo') : (t.viewHeatmap || 'View Grad-CAM Heatmap')}
                   </button>
                 </div>
+
+                {/* Recommendations Section: Organic, Chemical, Prevention & Care */}
+                {(() => {
+                  const predClass = diagnosis.diagnosis?.predicted_class || 'Healthy_Soyabean';
+                  const rec = t.diseaseRemedies?.[predClass] || {
+                    organic: diagnosis.remedy?.organic?.solution || 'Apply Neem seed kernel extract (NSKE 5%) or bio-fungicide.',
+                    chemical: diagnosis.remedy?.chemical?.medicine || t.remedies?.noneNeeded || 'Refer to local agriculture office.',
+                    prevention: diagnosis.remedy?.cultural || 'Maintain recommended row spacing and practice crop rotation.'
+                  };
+
+                  return (
+                    <div className="remedy-section">
+                      <h4 className="remedy-section-title">{t.remedies?.sectionTitle || 'Treatment & Advisory'}</h4>
+
+                      {/* Organic Treatment Card */}
+                      <div className="remedy-card organic-card">
+                        <div className="remedy-card-header">
+                          <span className="remedy-badge organic">
+                            <Sprout size={14} />
+                            <span>{t.remedies?.organicTitle || 'Organic Treatment'}</span>
+                          </span>
+                        </div>
+                        <p className="remedy-card-content">{rec.organic}</p>
+                      </div>
+
+                      {/* Chemical Treatment Card */}
+                      <div className="remedy-card chemical-card">
+                        <div className="remedy-card-header">
+                          <span className="remedy-badge chemical">
+                            <FlaskConical size={14} />
+                            <span>{t.remedies?.chemicalTitle || 'Chemical Treatment'}</span>
+                          </span>
+                        </div>
+                        <p className="remedy-card-content">{rec.chemical}</p>
+                        <p className="remedy-caution-note">
+                          <AlertTriangle size={12} />
+                          <span>{t.remedies?.pesticideCaution}</span>
+                        </p>
+                      </div>
+
+                      {/* Prevention & Care Card */}
+                      <div className="remedy-card prevention-card">
+                        <div className="remedy-card-header">
+                          <span className="remedy-badge prevention">
+                            <ShieldCheck size={14} />
+                            <span>{t.remedies?.preventionTitle || 'Prevention & Care'}</span>
+                          </span>
+                        </div>
+                        <p className="remedy-card-content">{rec.prevention}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </section>
             )}
           </div>
