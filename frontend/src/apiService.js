@@ -48,32 +48,77 @@ export async function diagnoseCropImage(imageFile) {
     console.warn('Backend service offline or unreachable. Returning resilient local fallback response:', err);
 
     // Resilient fallback structure for offline testing and smooth UI rendering
+    // Picks from known classes to simulate variety when testing without backend
+    const mockClasses = [
+      {
+        pred: 'Soyabean_Rust',
+        top3: [
+          { class_name: 'Soyabean_Rust', confidence: 0.88 },
+          { class_name: 'Soyabean_Spectoria_Brown_Spot', confidence: 0.08 },
+          { class_name: 'Healthy_Soyabean', confidence: 0.04 }
+        ],
+        band: 'HIGH',
+        remedy: {
+          chemical: {
+            medicine: 'Hexaconazole 5% EC or Tebuconazole 25.9% EC (Refer to product label for dosage)',
+            safety_interval_days: 14
+          },
+          organic: {
+            solution: 'Neem Seed Kernel Extract (NSKE 5%) spray'
+          },
+          cultural: 'Maintain proper spacing to improve air circulation and reduce canopy moisture.'
+        }
+      },
+      {
+        pred: 'Soyabean_Frog_Leaf_Eye',
+        top3: [
+          { class_name: 'Soyabean_Frog_Leaf_Eye', confidence: 0.82 },
+          { class_name: 'Soyabean_Rust', confidence: 0.11 },
+          { class_name: 'Soyabean_Spectoria_Brown_Spot', confidence: 0.07 }
+        ],
+        band: 'HIGH',
+        remedy: {
+          chemical: {
+            medicine: 'Azoxystrobin or Carbendazim (Follow product label instructions)',
+            safety_interval_days: 15
+          },
+          organic: {
+            solution: 'Trichoderma harzianum bio-fungicide spray'
+          },
+          cultural: 'Crop rotation with non-host crops and use of certified disease-free seeds.'
+        }
+      },
+      {
+        pred: 'Healthy_Soyabean',
+        top3: [
+          { class_name: 'Healthy_Soyabean', confidence: 0.91 },
+          { class_name: 'Soyabean_Rust', confidence: 0.05 },
+          { class_name: 'Caterpillar and Semilooper Pest Attack', confidence: 0.04 }
+        ],
+        band: 'HIGH',
+        remedy: {
+          chemical: null,
+          organic: {
+            solution: 'Regular scouting and balanced nutrition (NPK + micro-nutrients).'
+          },
+          cultural: 'Keep field weed-free and inspect plants weekly.'
+        }
+      }
+    ];
+
+    const pick = mockClasses[Math.floor(Math.random() * mockClasses.length)];
+
     return {
       success: true,
       _isMockFallback: true,
       diagnosis: {
-        predicted_class: 'Soyabean_Rust',
-        confidence: 0.894,
-        confidence_band: 'HIGH',
-        top3_classes: [
-          { class_name: 'Soyabean_Rust', confidence: 0.894 },
-          { class_name: 'Soyabean_Spectoria_Brown_Spot', confidence: 0.082 },
-          { class_name: 'Healthy_Soyabean', confidence: 0.024 }
-        ],
-        // Sample Grad-CAM heatmap overlay image URL
+        predicted_class: pick.pred,
+        confidence: pick.top3[0].confidence,
+        confidence_band: pick.band,
+        top3_classes: pick.top3,
         gradcam_heatmap_url: 'https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?auto=format&fit=crop&w=600&q=80'
       },
-      remedy: {
-        chemical: {
-          medicine: 'Hexaconazole 5% EC or Tebuconazole 25.9% EC',
-          dosage: '200 ml per acre in 200 liters of water',
-          safety_interval_days: 14
-        },
-        organic: {
-          solution: 'Neem Seed Kernel Extract (NSKE 5%) spray'
-        },
-        cultural: 'Maintain proper row spacing (45 cm) to allow air circulation and lower canopy humidity.'
-      }
+      remedy: pick.remedy
     };
   }
 }

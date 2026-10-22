@@ -1,68 +1,42 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Leaf,
   Camera,
-  Image as ImageIcon,
-  ShieldCheck,
+  FileText,
   Home,
   History,
-  Sparkles,
-  AlertCircle,
-  AlertTriangle,
-  Eye,
-  Check,
-  RotateCcw,
+  FileCheck,
+  HelpCircle,
   Sun,
   Type,
-  Landmark,
-  Bug,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  AlertTriangle,
   HelpCircle as QuestionIcon,
-  Focus,
+  PhoneCall,
 } from 'lucide-react';
 import { translations } from './translations';
-import { diagnoseCropImage, checkBackendHealth } from './apiService';
+import { diagnoseCropImage } from './apiService';
 import { compressLeafImage } from './imageCompressor';
-import {
-  getConfidenceBand,
-  isLowConfidenceOrUnclear,
-  isInsectPest,
-  isNoDiseaseDetected,
-  isConfusableCondition,
-  getDifferentialDiagnosisNote,
-} from './confidenceHelper';
-import { GOVERNMENT_SCHEMES } from './schemes.data';
-import VoiceGuide from './components/VoiceGuide';
 import GradCamOverlay from './components/GradCamOverlay';
-
-function formatScanWhen(scan) {
-  if (scan.date && scan.time) {
-    return `${scan.date} · ${scan.time}`;
-  }
-  if (scan.time) return scan.time;
-  return '';
-}
+import VoiceGuide from './components/VoiceGuide';
 
 export default function App() {
-  const [lang, setLang] = useState(() => localStorage.getItem('agrocure_lang') || 'hi');
+  const [lang, setLang] = useState(() => localStorage.getItem('agrocure_lang') || 'en');
   const [largeText, setLargeText] = useState(() => localStorage.getItem('agrocure_font_size') === 'large');
   const [sunlightMode, setSunlightMode] = useState(() => localStorage.getItem('agrocure_sunlight') === 'true');
-  const [consentChoice, setConsentChoice] = useState(() => localStorage.getItem('agrocure_consent'));
-
-  // Active tab: 'home' | 'history' | 'schemes' | 'help'
   const [activeTab, setActiveTab] = useState('home');
 
-  const [isBrowserOffline, setIsBrowserOffline] = useState(
-    typeof navigator !== 'undefined' ? !navigator.onLine : false
-  );
-  const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [stepStatus, setStepStatus] = useState('');
-  const [error, setError] = useState(null);
   const [diagnosis, setDiagnosis] = useState(null);
-  const [activeRemedyTab, setActiveRemedyTab] = useState('chemical');
   const [showHeatmap, setShowHeatmap] = useState(false);
-  const [farmerFeedback, setFarmerFeedback] = useState(null);
+  const [historyFilter, setHistoryFilter] = useState('All');
+
+  const cameraInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const t = translations[lang] || translations.en;
 
   const [recentScans, setRecentScans] = useState(() => {
     try {
@@ -70,21 +44,12 @@ export default function App() {
       return saved ? JSON.parse(saved) : [
         {
           id: '1',
-          name: 'Soyabean_Rust',
-          date: '18 Oct 2026',
-          time: '10:42 AM',
-          band: 'possible',
-          healthy: false,
-          thumbnail: null,
-        },
-        {
-          id: '2',
-          name: 'Healthy_Soyabean',
-          date: '17 Oct 2026',
-          time: '4:18 PM',
-          band: 'likely',
-          healthy: true,
-          thumbnail: null,
+          name: 'Soyabean Rust',
+          date: '19 Oct 2026',
+          time: '10:24 PM',
+          band: 'Likely',
+          bandClass: 'likely',
+          thumb: 'https://images.unsplash.com/photo-1592417817098-8f3d6ef23a2e?w=120&auto=format&fit=crop&q=80',
         },
       ];
     } catch {
@@ -92,27 +57,25 @@ export default function App() {
     }
   });
 
-  const cameraInputRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const recentSectionRef = useRef(null);
-  const t = translations[lang] || translations.hi;
-  const englishNames = translations.en.diseaseNames;
+  // Schemes Questionnaire State (6 steps + Step 7 results)
+  const [schemeStep, setSchemeStep] = useState(1);
+  const [schemeForm, setSchemeForm] = useState({
+    state: 'Maharashtra',
+    landSize: 'Under 1 hectare',
+    landOwned: 'Yes',
+    crop: 'Soybean',
+    category: 'General',
+    isWoman: 'No',
+    docs: { bankAadhaar: true, mobileAadhaar: true, land712: true },
+  });
 
   useEffect(() => {
-    if (largeText) {
-      document.body.classList.add('large-text-mode');
-    } else {
-      document.body.classList.remove('large-text-mode');
-    }
+    document.body.classList.toggle('large-text-mode', largeText);
     localStorage.setItem('agrocure_font_size', largeText ? 'large' : 'normal');
   }, [largeText]);
 
   useEffect(() => {
-    if (sunlightMode) {
-      document.body.classList.add('sunlight-mode');
-    } else {
-      document.body.classList.remove('sunlight-mode');
-    }
+    document.body.classList.toggle('sunlight-mode', sunlightMode);
     localStorage.setItem('agrocure_sunlight', sunlightMode ? 'true' : 'false');
   }, [sunlightMode]);
 
@@ -120,91 +83,43 @@ export default function App() {
     localStorage.setItem('agrocure_lang', lang);
   }, [lang]);
 
-  // Browser online/offline (not backend health)
-  useEffect(() => {
-    const goOnline = () => setIsBrowserOffline(false);
-    const goOffline = () => setIsBrowserOffline(true);
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    setIsBrowserOffline(!navigator.onLine);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
-  }, []);
-
-  // Keep backend health check for diagnosis resilience (no UI badge)
-  useEffect(() => {
-    async function checkHealth() {
-      try {
-        await checkBackendHealth();
-      } catch {
-        /* silent — offline badge uses navigator.onLine only */
-      }
-    }
-    checkHealth();
-    const interval = setInterval(checkHealth, 15000);
-    return () => clearInterval(interval);
-  }, []);
-
   const processImageFile = async (file) => {
     if (!file) return;
-
-    setError(null);
     setLoading(true);
     setShowHeatmap(false);
-    setFarmerFeedback(null);
-    setStepStatus(t.stepReceived);
-    setActiveTab('home');
 
     try {
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
 
-      setStepStatus(t.stepCompressing);
       const readyFile = await compressLeafImage(file, 800, 0.78);
-      setImageFile(readyFile);
-
-      setStepStatus(t.stepAnalyzing);
       const result = await diagnoseCropImage(readyFile);
       setDiagnosis(result);
-      setStepStatus(t.stepDone);
 
-      if (consentChoice !== 'no') {
-        const topConfidence = result.diagnosis.confidence;
-        const now = new Date();
-        const newScan = {
-          id: Date.now().toString(),
-          name: result.diagnosis.predicted_class,
-          date: now.toLocaleDateString(lang === 'en' ? 'en-IN' : lang === 'mr' ? 'mr-IN' : 'hi-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          }),
-          time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          band: getConfidenceBand(topConfidence),
-          healthy: isNoDiseaseDetected(result.diagnosis.predicted_class),
-          thumbnail: previewUrl,
-        };
+      const rawClass = result.diagnosis?.predicted_class || 'Healthy_Soyabean';
+      const commonName = t.diseaseNames?.[rawClass] || rawClass.replace(/_/g, ' ');
+      const conf = result.diagnosis?.confidence ?? 0.85;
+      const bandClass = conf >= 0.8 ? 'likely' : conf >= 0.5 ? 'possible' : 'notsure';
+      const bandName = t.bands?.[bandClass] || (bandClass === 'likely' ? 'Likely' : bandClass === 'possible' ? 'Possible' : 'Not sure');
 
-        setRecentScans((prev) => {
-          const updated = [newScan, ...prev].slice(0, 10);
-          try {
-            // Persist without large data-URLs if storage is tight
-            const forStorage = updated.map(({ thumbnail, ...rest }) => ({
-              ...rest,
-              thumbnail: typeof thumbnail === 'string' && thumbnail.startsWith('blob:') ? null : thumbnail,
-            }));
-            localStorage.setItem('agrocure_scans', JSON.stringify(forStorage));
-          } catch {
-            /* ignore quota */
-          }
-          return updated;
-        });
-      }
+      const now = new Date();
+      const newScan = {
+        id: Date.now().toString(),
+        name: commonName,
+        date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        band: bandName,
+        bandClass: bandClass,
+        thumb: previewUrl,
+      };
+
+      setRecentScans((prev) => {
+        const updated = [newScan, ...prev];
+        localStorage.setItem('agrocure_scans', JSON.stringify(updated));
+        return updated;
+      });
     } catch (err) {
       console.error(err);
-      setError(err.message || t.errorConnecting);
     } finally {
       setLoading(false);
     }
@@ -212,715 +127,430 @@ export default function App() {
 
   const handleFileInputChange = (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      processImageFile(file);
-    }
-    e.target.value = '';
+    if (file) processImageFile(file);
   };
-
-  const retryDiagnosis = () => {
-    if (imageFile) {
-      processImageFile(imageFile);
-    } else {
-      cameraInputRef.current?.click();
-    }
-  };
-
-  const handleConsent = (choice) => {
-    setConsentChoice(choice);
-    localStorage.setItem('agrocure_consent', choice);
-    if (choice === 'no') {
-      localStorage.removeItem('agrocure_scans');
-      setRecentScans([]);
-    }
-  };
-
-  const handleFeedback = (response) => {
-    setFarmerFeedback(response);
-  };
-
-  const resetScan = () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setImageFile(null);
-    setImagePreview(null);
-    setDiagnosis(null);
-    setError(null);
-    setShowHeatmap(false);
-    setFarmerFeedback(null);
-    setActiveTab('home');
-  };
-
-  const goHistory = () => {
-    setActiveTab('history');
-    if (diagnosis) {
-      setDiagnosis(null);
-      setImagePreview(null);
-      setImageFile(null);
-      setError(null);
-    }
-    requestAnimationFrame(() => {
-      recentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  };
-
-  const goHelp = () => {
-    setActiveTab('help');
-    alert(t.helpAlert);
-  };
-
-  const primaryScore = diagnosis?.diagnosis?.confidence ?? 0;
-  const isUnclearDiagnosis = diagnosis ? isLowConfidenceOrUnclear(primaryScore) : false;
-  const topClass = diagnosis?.diagnosis?.predicted_class || '';
-  const bandKey = getConfidenceBand(primaryScore);
-  const latestThree = recentScans.slice(0, 3);
-
-  const voiceText = useMemo(() => {
+   const voiceText = React.useMemo(() => {
     if (!diagnosis) {
-      return t.voiceWelcome;
+      return lang === 'mr'
+        ? 'नमस्कार शेतकरी बंधूंनो, तुमच्या सोयाबीन पानाचा फोटो काढा किंवा अपलोड करा.'
+        : lang === 'hi'
+        ? 'नमस्कार किसान भाइयों, अपनी सोयाबीन पत्ती की फोटो लें या अपलोड करें।'
+        : 'Welcome farmer, please take or upload a soybean leaf photo.';
     }
-    const predClass = diagnosis.diagnosis.predicted_class;
-    const diseaseName = t.diseaseNames[predClass] || predClass;
-    const bandLabel = t.bands[getConfidenceBand(diagnosis.diagnosis.confidence)];
-    let text = `${t.diagnosisResult}: ${diseaseName}. ${t.confidence}: ${bandLabel}. `;
-    if (isNoDiseaseDetected(predClass)) {
-      text += `${t.noDiseaseDetected} `;
-    } else if (isInsectPest(predClass)) {
-      text += `${t.insectPestNotice}. `;
-    }
-    const diffNote = getDifferentialDiagnosisNote(predClass, t);
-    if (diffNote) text += `${diffNote} `;
-    if (diagnosis.remedy?.chemical?.medicine) {
-      text += `${t.chemicalTab}: ${diagnosis.remedy.chemical.medicine}. ${t.labelInstructionsOnly}. `;
-    }
-    if (diagnosis.remedy?.organic?.solution) {
-      text += `${t.organicTab}: ${diagnosis.remedy.organic.solution}. `;
-    }
-    text += t.mandatoryPesticideSafety;
-    return text;
-  }, [diagnosis, t]);
-
-  const showEnglishSecondary = lang !== 'en';
+    const predClass = diagnosis.diagnosis?.predicted_class || 'Leaf Disease';
+    return `${t.greeting}. Diagnosis: ${predClass.replace(/_/g, ' ')}.`;
+  }, [diagnosis, lang, t]);
 
   return (
-    <main className="agro-shell">
-      <div className="accessibility-bar" role="toolbar" aria-label={t.textSize}>
-        <button
-          type="button"
-          className="a11y-btn"
-          onClick={() => setLargeText(!largeText)}
-          aria-pressed={largeText}
-          aria-label={largeText ? t.normalText : t.largeText}
-        >
-          <Type size={18} aria-hidden="true" />
-          <span>{largeText ? t.normalText : t.largeText}</span>
-        </button>
-
-        <button
-          type="button"
-          className="a11y-btn"
-          onClick={() => setSunlightMode(!sunlightMode)}
-          aria-pressed={sunlightMode}
-          aria-label={sunlightMode ? t.normalMode : t.sunlightMode}
-        >
-          <Sun size={18} aria-hidden="true" />
-          <span>{sunlightMode ? t.normalMode : t.sunlightMode}</span>
-        </button>
-      </div>
-
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <Leaf size={24} strokeWidth={2.4} />
-          </span>
-          <span>
-            Agro<span>Cure</span>
-          </span>
+    <div className="app-shell">
+      {/* Top Header */}
+      <header className="top-header">
+        <div className="brand-title">
+          <div className="brand-logo">
+            <Leaf size={18} color="#ffffff" />
+          </div>
+          <span className="brand-name">AgroCure</span>
         </div>
 
-        <div className="top-actions">
-          <div className="language-toggle" role="group" aria-label="Language">
-            <button
-              type="button"
-              className={lang === 'en' ? 'active' : ''}
-              onClick={() => setLang('en')}
-              aria-pressed={lang === 'en'}
-              aria-label="English"
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              className={lang === 'hi' ? 'active' : ''}
-              onClick={() => setLang('hi')}
-              aria-pressed={lang === 'hi'}
-              aria-label="हिंदी"
-            >
-              हिंदी
-            </button>
-            <button
-              type="button"
-              className={lang === 'mr' ? 'active' : ''}
-              onClick={() => setLang('mr')}
-              aria-pressed={lang === 'mr'}
-              aria-label="मराठी"
-            >
-              मराठी
-            </button>
+        <div className="header-actions">
+          <div className="lang-pill">
+            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>EN</button>
+            <button className={lang === 'hi' ? 'active' : ''} onClick={() => setLang('hi')}>हिं</button>
+            <button className={lang === 'mr' ? 'active' : ''} onClick={() => setLang('mr')}>मरा</button>
           </div>
 
           <VoiceGuide
             text={voiceText}
             lang={lang}
-            labelPlay={t.listenVoice}
-            labelStop={t.stopVoice}
+            labelPlay={lang === 'mr' ? 'ऐका' : lang === 'hi' ? 'सुनिए' : 'Listen'}
+            labelStop={lang === 'mr' ? 'थांबा' : lang === 'hi' ? 'रोकें' : 'Stop'}
           />
+
+          <button className="a11y-pill-btn" onClick={() => setLargeText(!largeText)} aria-label="Toggle text size">
+            <Type size={14} />
+            <span>Text</span>
+          </button>
+
+          <button className="a11y-pill-btn" onClick={() => setSunlightMode(!sunlightMode)} aria-label="Toggle sunlight mode">
+            <Sun size={14} />
+            <span>Sun</span>
+          </button>
         </div>
       </header>
 
-      <div className="soybean-scope-banner" role="status">
-        <AlertCircle size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
-        <span>{t.soybeanOnlyMicro || t.soybeanOnlyWarning}</span>
+      {/* Hidden File Upload Triggers */}
+      <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFileInputChange} />
+      <input type="file" ref={fileInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleFileInputChange} />
+
+      {/* Main Content */}
+      <main className="main-content">
+        {/* PAGE 1: HOME */}
+        {activeTab === 'home' && (
+          <div className="tab-page home-page">
+            {!diagnosis && !loading ? (
+              <>
+                <section className="welcome-banner">
+                  <h1>{t.greeting}</h1>
+                  <p>{t.subtitle}</p>
+                </section>
+
+                <div className="notice-banner">
+                  <Leaf size={18} className="notice-icon" />
+                  <span>{t.soybeanOnly}</span>
+                </div>
+
+                <div className="action-buttons-group">
+                  <button className="btn-primary-green" onClick={() => cameraInputRef.current?.click()}>
+                    <Camera size={20} />
+                    <span>{t.openCamera}</span>
+                  </button>
+
+                  <button className="btn-outline-green" onClick={() => fileInputRef.current?.click()}>
+                    <FileText size={20} />
+                    <span>{t.choosePhoto}</span>
+                  </button>
+                </div>
+
+                <section className="guide-card">
+                  <h2>{t.howToTitle}</h2>
+                  <div className="guide-step">
+                    <div className="step-icon"><Sun size={18} /></div>
+                    <p>{t.step1}</p>
+                  </div>
+                  <div className="guide-step">
+                    <div className="step-icon"><Leaf size={18} /></div>
+                    <p>{t.step2}</p>
+                  </div>
+                </section>
+              </>
+            ) : loading ? (
+              <div className="loading-box">
+                <p>{t.analyzing || 'Analyzing leaf image...'}</p>
+              </div>
+            ) : (
+              <section className="diagnosis-results-card">
+                <button className="back-link" onClick={() => setDiagnosis(null)}>
+                  <ArrowLeft size={16} /> {t.backToScanner || 'Back to scanner'}
+                </button>
+
+                {(() => {
+                  const predClass = diagnosis.diagnosis?.predicted_class || 'Healthy_Soyabean';
+                  const conf = diagnosis.diagnosis?.confidence ?? 0.85;
+                  const bandKey = conf >= 0.8 ? 'likely' : conf >= 0.5 ? 'possible' : 'notsure';
+                  const bandText = t.bands?.[bandKey] || (bandKey === 'likely' ? 'Likely' : bandKey === 'possible' ? 'Possible' : 'Not sure');
+                  const diseaseLabel = t.diseaseNames?.[predClass] || predClass.replace(/_/g, ' ');
+
+                  return (
+                    <div className="result-header">
+                      <h3>{diseaseLabel}</h3>
+                      <span className={`confidence-pill ${bandKey}`}>{bandText}</span>
+                    </div>
+                  );
+                })()}
+
+                <div className="image-preview-frame">
+                  {showHeatmap ? (
+                    <GradCamOverlay imageSrc={imagePreview} />
+                  ) : (
+                    <img src={imagePreview} alt="Leaf preview" />
+                  )}
+                  <button className="heatmap-toggle-btn" onClick={() => setShowHeatmap(!showHeatmap)}>
+                    {showHeatmap ? (t.viewOriginal || 'View original photo') : (t.viewHeatmap || 'View Grad-CAM Heatmap')}
+                  </button>
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+
+        {/* PAGE 2: HISTORY */}
+        {activeTab === 'history' && (
+          <div className="tab-page history-page">
+            <section className="page-header">
+              <h1>{t.historyTitle}</h1>
+              <p>{t.historySub}</p>
+            </section>
+
+            <div className="filter-chips-row">
+              <span className="filter-label">{t.filterLabel}</span>
+              <div className="chips-container">
+                {[t.filters.all, t.filters.today, t.filters.days7, t.filters.month].map((chip) => (
+                  <button
+                    key={chip}
+                    className={`chip-btn ${historyFilter === chip ? 'active' : ''}`}
+                    onClick={() => setHistoryFilter(chip)}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="scan-history-list">
+              {recentScans.map((scan) => (
+                <div key={scan.id} className="history-card">
+                  {scan.thumb ? (
+                    <img src={scan.thumb} alt={scan.name} className="history-thumb" onError={(e) => { e.target.style.display = 'none'; }} />
+                  ) : (
+                    <div className="history-thumb-placeholder"><Leaf size={20} /></div>
+                  )}
+                  <div className="history-details">
+                    <h3>{scan.name}</h3>
+                    <span className="history-timestamp">{scan.date} · {scan.time}</span>
+                  </div>
+                  <div className={`status-badge ${scan.bandClass}`}>
+                    {scan.bandClass === 'likely' && <CheckCircle2 size={12} />}
+                    {scan.bandClass === 'possible' && <AlertTriangle size={12} />}
+                    {scan.bandClass === 'notsure' && <QuestionIcon size={12} />}
+                    <span>{scan.band}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* PAGE 3: SCHEMES (Multilingual Questionnaire) */}
+{activeTab === 'schemes' && (
+  <div className="tab-page schemes-page">
+    <div className="questionnaire-progress-bar">
+      <div className="progress-fill" style={{ width: `${(schemeStep / 6) * 100}%` }}></div>
+    </div>
+
+    <div className="step-nav-header">
+      {schemeStep > 1 && (
+        <button className="step-back-btn" onClick={() => setSchemeStep((s) => s - 1)}>
+          <ArrowLeft size={16} /> {t.schemes.back}
+        </button>
+      )}
+      {schemeStep <= 5 && (
+        <span className="step-count">
+          {t.schemes.question} {schemeStep} / 5
+        </span>
+      )}
+    </div>
+
+    {/* Step 1: State Selection */}
+    {schemeStep === 1 && (
+      <div className="question-card">
+        <h2>{t.schemes.q1Title}</h2>
+        <p className="question-sub">{t.schemes.q1Sub}</p>
+
+        <label className="input-label">{t.schemes.chooseState}</label>
+        <select
+          className="custom-select"
+          value={schemeForm.state}
+          onChange={(e) => setSchemeForm({ ...schemeForm, state: e.target.value })}
+        >
+          <option value="Maharashtra">Maharashtra (महाराष्ट्र)</option>
+          <option value="Madhya Pradesh">Madhya Pradesh (मध्य प्रदेश)</option>
+          <option value="Rajasthan">Rajasthan (राजस्थान)</option>
+          <option value="Gujarat">Gujarat (गुजरात)</option>
+          <option value="Karnataka">Karnataka (कर्नाटक)</option>
+        </select>
+        <span className="field-hint">{t.schemes.stateHint}</span>
+
+        <button className="btn-primary-green next-btn" onClick={() => setSchemeStep(2)}>
+          {t.schemes.next} <ArrowRight size={18} />
+        </button>
       </div>
+    )}
 
-      {isBrowserOffline && (
-        <div className="offline-badge" role="status">
-          <AlertTriangle size={20} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
-          <div>
-            <strong>{t.offlineBadgeTitle}</strong>
-            <span>{t.offlineBadgeDetail}</span>
-          </div>
-        </div>
-      )}
+    {/* Step 2: Land Size & Ownership */}
+{schemeStep === 2 && (
+  <div className="question-card">
+    <h2>{t.schemes.q2Title}</h2>
+    <div className="radio-options-group">
+      {t.schemes.landSize.map((opt, idx) => (
+        <label key={idx} className={`radio-card ${schemeForm.landSize === opt ? 'selected' : ''}`}>
+          <input
+            type="radio"
+            name="landSize"
+            checked={schemeForm.landSize === opt}
+            onChange={() => setSchemeForm({ ...schemeForm, landSize: opt })}
+          />
+          <span>{opt}</span>
+        </label>
+      ))}
+    </div>
 
-      <section className="welcome-row">
-        <div>
-          <h1>{t.greeting}</h1>
-          <p className="subtitle">{t.subtitle}</p>
-        </div>
-        <div className="avatar" aria-hidden="true">
-          <Leaf size={26} />
-        </div>
-      </section>
+    <h3 className="section-subheading">{t.schemes.q2SubTitle}</h3>
+    <div className="radio-options-group">
+      {t.schemes.yesNo.map((opt, idx) => (
+        <label key={idx} className={`radio-card ${schemeForm.landOwned === opt ? 'selected' : ''}`}>
+          <input
+            type="radio"
+            name="landOwned"
+            checked={schemeForm.landOwned === opt}
+            onChange={() => setSchemeForm({ ...schemeForm, landOwned: opt })}
+          />
+          <span>{opt}</span>
+        </label>
+      ))}
+    </div>
 
-      {!consentChoice && (
-        <section className="consent-card" aria-labelledby="consent-title">
-          <div className="consent-header" id="consent-title">
-            <ShieldCheck size={20} aria-hidden="true" />
-            <span>{t.privacyTitle}</span>
-          </div>
-          <p>{t.privacyQuestion}</p>
-          <div className="consent-buttons">
-            <button type="button" className="consent-btn" onClick={() => handleConsent('yes')}>
-              {t.consentYes}
-            </button>
-            <button type="button" className="consent-btn" onClick={() => handleConsent('no')}>
-              {t.consentNo}
-            </button>
-            <button type="button" className="consent-btn" onClick={() => handleConsent('not_sure')}>
-              {t.consentNotSure}
-            </button>
-          </div>
-        </section>
-      )}
+    <button className="btn-primary-green next-btn" onClick={() => setSchemeStep(3)}>
+      {t.schemes.next} <ArrowRight size={18} />
+    </button>
+  </div>
+)}
 
-      <input
-        type="file"
-        ref={cameraInputRef}
-        accept="image/*"
-        capture="environment"
-        style={{ display: 'none' }}
-        onChange={handleFileInputChange}
-      />
-      <input
-        type="file"
-        ref={fileInputRef}
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleFileInputChange}
-      />
-
-      {activeTab === 'schemes' && (
-        <section className="schemes-view" aria-labelledby="schemes-heading">
-          <div className="section-heading">
-            <h2 id="schemes-heading">{t.schemesSectionTitle}</h2>
-          </div>
-
-          {GOVERNMENT_SCHEMES.map((scheme) => (
-            <article key={scheme.id} className="scheme-card">
-              <div className="scheme-header">
-                <h3>{scheme.name[lang] || scheme.name.en}</h3>
-                <span
-                  className={`verified-badge ${scheme.verified ? 'verified' : 'unverified'}`}
-                >
-                  {scheme.verified ? t.schemeVerifiedBadge : t.schemeUnverifiedBadge}
-                </span>
-              </div>
-
-              <p className="scheme-date">
-                {t.schemeLastChecked}: {scheme.last_checked}
-              </p>
-
-              <p className="scheme-summary">
-                {scheme.shortSummary[lang] || scheme.shortSummary.en}
-              </p>
-
-              <div className="scheme-advice">
-                <strong>{scheme.actionAdvice[lang] || scheme.actionAdvice.en}</strong>
-              </div>
-            </article>
+    {/* Step 3: Crop Selection */}
+    {schemeStep === 3 && (
+      <div className="question-card">
+        <h2>{t.schemes.q3Title}</h2>
+        <div className="radio-options-group">
+          {t.schemes.crops.map((crop, idx) => (
+            <label key={idx} className={`radio-card ${schemeForm.crop === crop ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="crop"
+                checked={schemeForm.crop === crop}
+                onChange={() => setSchemeForm({ ...schemeForm, crop })}
+              />
+              <span>{crop}</span>
+            </label>
           ))}
+        </div>
 
-          <div className="scheme-confirm-notice">
-            <AlertCircle size={18} aria-hidden="true" style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-            {t.schemeConfirmNotice}
+        <button className="btn-primary-green next-btn" onClick={() => setSchemeStep(4)}>
+          {t.schemes.next} <ArrowRight size={18} />
+        </button>
+      </div>
+    )}
+
+    {/* Step 4: Social Category & Gender */}
+    {schemeStep === 4 && (
+      <div className="question-card">
+        <h2>{t.schemes.q4Title}</h2>
+        <div className="radio-options-group">
+          {t.schemes.categories.map((cat, idx) => (
+            <label key={idx} className={`radio-card ${schemeForm.category === cat ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="category"
+                checked={schemeForm.category === cat}
+                onChange={() => setSchemeForm({ ...schemeForm, category: cat })}
+              />
+              <span>{cat}</span>
+            </label>
+          ))}
+        </div>
+
+        <h3 className="section-subheading">{t.schemes.q4SubTitle}</h3>
+        <div className="radio-options-group">
+          {t.schemes.yesNo.map((opt, idx) => (
+            <label key={idx} className={`radio-card ${schemeForm.isWoman === opt ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="isWoman"
+                checked={schemeForm.isWoman === opt}
+                onChange={() => setSchemeForm({ ...schemeForm, isWoman: opt })}
+              />
+              <span>{opt}</span>
+            </label>
+          ))}
+        </div>
+
+        <button className="btn-primary-green next-btn" onClick={() => setSchemeStep(5)}>
+          {t.schemes.next} <ArrowRight size={18} />
+        </button>
+      </div>
+    )}
+
+    {/* Step 5: Document Checkboxes */}
+    {schemeStep === 5 && (
+      <div className="question-card">
+        <h2>{t.schemes.q5Title}</h2>
+        <p className="question-sub">{t.schemes.q5Sub}</p>
+
+        <div className="checkbox-options-group">
+          {t.schemes.docs.map((docText, idx) => (
+            <label key={idx} className="checkbox-card">
+              <input
+                type="checkbox"
+                defaultChecked={true}
+              />
+              <span>{docText}</span>
+            </label>
+          ))}
+        </div>
+
+        <button className="btn-primary-green next-btn" onClick={() => setSchemeStep(6)}>
+          {t.schemes.showSchemes} <ArrowRight size={18} />
+        </button>
+      </div>
+    )}
+
+    {/* Step 6: Matched Government Schemes View */}
+    {schemeStep === 6 && (
+      <div className="matched-schemes-view">
+        <h2>{t.schemes.eligibleTitle}</h2>
+        <p className="question-sub">
+          {t.schemes.eligibleSub} <strong>{schemeForm.state}</strong>
+        </p>
+
+        <article className="eligible-scheme-card">
+          <div className="scheme-title-row">
+            <h3>{t.schemes.scheme1Title}</h3>
+            <span className="verified-badge">✓ {t.schemes.verified}</span>
           </div>
-
-          <div style={{ marginTop: '16px' }}>
-            <button type="button" className="reset-btn" onClick={() => setActiveTab('home')}>
-              {t.home}
-            </button>
+          <p className="scheme-desc">{t.schemes.scheme1Desc}</p>
+          <div className="advice-pill">
+            <strong>{t.schemes.action}</strong> {t.schemes.scheme1Action}
           </div>
-        </section>
-      )}
+        </article>
 
-      {activeTab !== 'schemes' && (
-        <>
-          {!diagnosis && !loading && (
-            <section className="scan-card" aria-labelledby="scan-heading">
-              <div className="scan-copy">
-                <div className="round-icon" aria-hidden="true">
-                  <Camera size={26} />
-                </div>
-                <div>
-                  <h2 id="scan-heading">{t.scanTitle}</h2>
-                  <p>{t.scanSubtitle}</p>
-                </div>
-              </div>
+        <button className="btn-outline-green" onClick={() => setSchemeStep(1)}>
+          {t.schemes.retake}
+        </button>
+      </div>
+    )}
+  </div>
+)}
 
-              <div className="scan-actions">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  aria-label={t.openCamera}
-                >
-                  <Camera size={20} aria-hidden="true" />
-                  <span>{t.openCamera}</span>
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label={t.choosePhoto}
-                >
-                  <ImageIcon size={20} aria-hidden="true" />
-                  <span>{t.choosePhoto}</span>
-                </button>
-              </div>
-
-              <div className="secure-note">
-                <ShieldCheck size={16} aria-hidden="true" />
-                <span>{t.secureNote}</span>
-              </div>
+        {/* PAGE 4: HELP */}
+        {activeTab === 'help' && (
+          <div className="tab-page help-page">
+            <section className="page-header">
+              <h1>{t.helpTitle}</h1>
+              <p>{t.helpSub}</p>
             </section>
-          )}
 
-          {loading && (
-            <div className="progress-card" role="status" aria-live="polite">
-              <div className="spinner" aria-hidden="true"></div>
-              <h3 style={{ fontSize: '1.15rem', color: '#166534', marginBottom: '8px' }}>
-                {stepStatus || t.diagnosing}
-              </h3>
-              {imagePreview && (
-                <img
-                  src={imagePreview}
-                  alt={t.analyzingAlt}
-                  style={{
-                    width: '130px',
-                    height: '130px',
-                    objectFit: 'cover',
-                    borderRadius: '12px',
-                    margin: '8px auto',
-                    display: 'block',
-                  }}
-                />
-              )}
+            <div className="help-card primary-help">
+              <PhoneCall size={28} className="help-icon" />
+              <div>
+                <h3>{t.kisanCenter}</h3>
+                <p>{t.kisanHelpline}</p>
+                <a href="tel:18001801551" className="phone-number">1800-180-1551</a>
+              </div>
             </div>
-          )}
+          </div>
+        )}
+      </main>
 
-          {error && (
-            <div className="error-card" role="alert">
-              <div className="error-card-header">
-                <AlertCircle size={22} aria-hidden="true" />
-                <strong>{error}</strong>
-              </div>
-              <button type="button" className="primary-button" onClick={retryDiagnosis}>
-                <RotateCcw size={18} aria-hidden="true" />
-                {t.retryBtn}
-              </button>
-            </div>
-          )}
-
-          {diagnosis && !loading && (
-            <section className="result-container" aria-labelledby="result-heading">
-              {isUnclearDiagnosis ? (
-                <div className="not-sure-box">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <AlertTriangle size={24} color="#9f1239" aria-hidden="true" />
-                    <h4 id="result-heading">{t.notSureTitle}</h4>
-                  </div>
-                  <p>{t.notSureAdvice}</p>
-                  <button
-                    type="button"
-                    className="primary-button"
-                    style={{ marginTop: '14px' }}
-                    onClick={() => cameraInputRef.current?.click()}
-                  >
-                    <Camera size={18} aria-hidden="true" />
-                    {t.retakePhoto}
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="result-header">
-                    <div className="result-title-group">
-                      {isNoDiseaseDetected(topClass) ? (
-                        <span className="category-tag healthy">
-                          <Check size={14} aria-hidden="true" />
-                          {t.diseaseNames.Healthy_Soyabean}
-                        </span>
-                      ) : isInsectPest(topClass) ? (
-                        <span className="category-tag pest">
-                          <Bug size={14} aria-hidden="true" />
-                          {t.insectPestNotice}
-                        </span>
-                      ) : (
-                        <span className="category-tag disease">
-                          <AlertCircle size={14} aria-hidden="true" />
-                          {t.diseaseNotice}
-                        </span>
-                      )}
-
-                      <h3 id="result-heading">
-                        {isNoDiseaseDetected(topClass)
-                          ? t.noDiseaseDetected
-                          : t.diseaseNames[topClass] || topClass}
-                      </h3>
-                      {showEnglishSecondary &&
-                        !isNoDiseaseDetected(topClass) &&
-                        englishNames[topClass] && (
-                          <span className="disease-name-en">{englishNames[topClass]}</span>
-                        )}
-                    </div>
-
-                    <div className="confidence-badge">
-                      <span
-                        className={`confidence-band band-${bandKey}`}
-                        aria-label={`${t.confidenceBand}: ${t.bands[bandKey]}`}
-                      >
-                        {t.bands[bandKey]}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="image-inspection">
-                    <div className="image-frame">
-                      {showHeatmap ? (
-                        diagnosis.diagnosis.gradcam_heatmap_url && !diagnosis._isMockFallback ? (
-                          <img
-                            src={diagnosis.diagnosis.gradcam_heatmap_url}
-                            alt={t.heatmapAlt}
-                          />
-                        ) : (
-                          <GradCamOverlay imageSrc={imagePreview} />
-                        )
-                      ) : (
-                        <img src={imagePreview} alt={t.leafScanAlt} />
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      className="toggle-view-btn"
-                      onClick={() => setShowHeatmap(!showHeatmap)}
-                      aria-pressed={showHeatmap}
-                      aria-label={showHeatmap ? t.originalPhoto : t.gradcamToggle}
-                    >
-                      <Eye size={16} aria-hidden="true" />
-                      <span>{showHeatmap ? t.originalPhoto : t.gradcamToggle}</span>
-                    </button>
-                  </div>
-
-                  {showHeatmap && (
-                    <p className="heatmap-caption">{t.heatmapExplanation}</p>
-                  )}
-
-                  {isConfusableCondition(topClass) && (
-                    <div className="differential-box" role="note">
-                      <div className="diff-header">
-                        <AlertTriangle size={18} aria-hidden="true" />
-                        <span>{t.couldAlsoBeTitle}</span>
-                      </div>
-                      <p>{getDifferentialDiagnosisNote(topClass, t)}</p>
-                    </div>
-                  )}
-
-                  <div className="candidates-section">
-                    <h4>{t.topCandidates}</h4>
-                    {diagnosis.diagnosis.top3_classes.map((cand, idx) => {
-                      const candBand = getConfidenceBand(cand.confidence);
-                      return (
-                        <div key={idx} className="candidate-row">
-                          <div className="candidate-labels">
-                            <span>
-                              {t.diseaseNames[cand.class_name] || cand.class_name}
-                              {showEnglishSecondary && englishNames[cand.class_name] && (
-                                <span className="disease-name-en">
-                                  {englishNames[cand.class_name]}
-                                </span>
-                              )}
-                            </span>
-                            <span className={`confidence-band band-${candBand}`}>
-                              {t.bands[candBand]}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="remedies-section">
-                    <h4>{t.remediesTitle}</h4>
-
-                    <div className="remedies-nav" role="tablist">
-                      <button
-                        type="button"
-                        className={`remedy-tab-btn ${activeRemedyTab === 'chemical' ? 'active' : ''}`}
-                        onClick={() => setActiveRemedyTab('chemical')}
-                        role="tab"
-                        aria-selected={activeRemedyTab === 'chemical'}
-                      >
-                        {t.chemicalTab}
-                      </button>
-                      <button
-                        type="button"
-                        className={`remedy-tab-btn ${activeRemedyTab === 'organic' ? 'active' : ''}`}
-                        onClick={() => setActiveRemedyTab('organic')}
-                        role="tab"
-                        aria-selected={activeRemedyTab === 'organic'}
-                      >
-                        {t.organicTab}
-                      </button>
-                      <button
-                        type="button"
-                        className={`remedy-tab-btn ${activeRemedyTab === 'cultural' ? 'active' : ''}`}
-                        onClick={() => setActiveRemedyTab('cultural')}
-                        role="tab"
-                        aria-selected={activeRemedyTab === 'cultural'}
-                      >
-                        {t.culturalTab}
-                      </button>
-                    </div>
-
-                    <div className="remedy-card-content">
-                      {activeRemedyTab === 'chemical' && (
-                        <div>
-                          <div className="remedy-item">
-                            <strong>{t.chemicalIngredient}</strong>
-                            <p>{diagnosis.remedy?.chemical?.medicine}</p>
-                          </div>
-                          <div className="remedy-item">
-                            <strong>{t.dosage}</strong>
-                            <p>{diagnosis.remedy?.chemical?.dosage || t.labelInstructionsOnly}</p>
-                          </div>
-                          <div className="remedy-item">
-                            <strong>{t.safetyInterval}</strong>
-                            <p>
-                              {diagnosis.remedy?.chemical?.safety_interval_days} {t.days}
-                            </p>
-                          </div>
-
-                          <div className="pesticide-safety-card">
-                            <ShieldCheck size={22} aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
-                            <p>{t.mandatoryPesticideSafety}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {activeRemedyTab === 'organic' && (
-                        <div className="remedy-item">
-                          <strong>{t.organicSolution}</strong>
-                          <p>{diagnosis.remedy?.organic?.solution}</p>
-                        </div>
-                      )}
-
-                      {activeRemedyTab === 'cultural' && (
-                        <div className="remedy-item">
-                          <strong>{t.culturalPractices}</strong>
-                          <p>{diagnosis.remedy?.cultural}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="schemes-jump-btn"
-                    onClick={() => setActiveTab('schemes')}
-                  >
-                    <Landmark size={18} aria-hidden="true" />
-                    <span>{t.viewSchemesBtn}</span>
-                  </button>
-
-                  <div className="feedback-box">
-                    <div className="feedback-header">{t.feedbackTitle}</div>
-                    {farmerFeedback ? (
-                      <p style={{ color: '#166534', fontWeight: 700 }}>{t.feedbackThankYou}</p>
-                    ) : (
-                      <div className="feedback-actions">
-                        <button type="button" className="feedback-btn" onClick={() => handleFeedback('yes')}>
-                          {t.feedbackYes}
-                        </button>
-                        <button type="button" className="feedback-btn" onClick={() => handleFeedback('no')}>
-                          {t.feedbackNo}
-                        </button>
-                        <button type="button" className="feedback-btn" onClick={() => handleFeedback('not_sure')}>
-                          {t.feedbackNotSure}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              <div className="actions-footer">
-                <VoiceGuide
-                  text={voiceText}
-                  lang={lang}
-                  labelPlay={t.listenVoice}
-                  labelStop={t.stopVoice}
-                />
-                <button type="button" className="reset-btn" onClick={resetScan}>
-                  <RotateCcw size={16} aria-hidden="true" />
-                  <span>{t.newScan}</span>
-                </button>
-              </div>
-            </section>
-          )}
-
-          <section
-            ref={recentSectionRef}
-            className={`content-grid${activeTab === 'history' ? ' history-focus' : ''}`}
-            aria-labelledby="scans-heading"
-          >
-            <div className="main-column">
-              <div className="section-heading">
-                <h2 id="scans-heading">{t.recentScans}</h2>
-              </div>
-
-              {latestThree.length === 0 ? (
-                <div className="empty-state" role="status">
-                  {t.emptyRecent}
-                </div>
-              ) : (
-                latestThree.map((scan) => (
-                  <article key={scan.id} className="result-card">
-                    <div className="scan-thumb" aria-hidden={!scan.thumbnail}>
-                      {scan.thumbnail ? (
-                        <img src={scan.thumbnail} alt="" />
-                      ) : (
-                        <Leaf size={22} aria-hidden="true" />
-                      )}
-                    </div>
-                    <div className="result-info">
-                      <strong>{t.diseaseNames[scan.name] || scan.name}</strong>
-                      {showEnglishSecondary && englishNames[scan.name] && (
-                        <span className="disease-name-en">{englishNames[scan.name]}</span>
-                      )}
-                      <span className="scan-meta">{formatScanWhen(scan)}</span>
-                    </div>
-                    <span className={`confidence-band band-${scan.band || 'likely'}`}>
-                      {t.bands[scan.band || 'likely']}
-                    </span>
-                  </article>
-                ))
-              )}
-            </div>
-
-            <aside className="how-card" aria-labelledby="how-heading">
-              <div className="how-header">
-                <div className="round-icon" style={{ width: '40px', height: '40px' }} aria-hidden="true">
-                  <Sparkles size={20} />
-                </div>
-                <h2 id="how-heading">{t.howToTitle}</h2>
-              </div>
-              <div className="tip-row">
-                <div className="tip-icon" aria-hidden="true">
-                  <Leaf size={20} />
-                </div>
-                <p>{t.step1}</p>
-              </div>
-              <div className="tip-row">
-                <div className="tip-icon" aria-hidden="true">
-                  <Sun size={20} />
-                </div>
-                <p>{t.step2}</p>
-              </div>
-              <div className="tip-row">
-                <div className="tip-icon" aria-hidden="true">
-                  <Focus size={20} />
-                </div>
-                <p>{t.step3}</p>
-              </div>
-            </aside>
-          </section>
-        </>
-      )}
-
-      <nav className="bottom-nav" aria-label="Main">
-        <button
-          type="button"
-          className={activeTab === 'home' ? 'nav-active' : ''}
-          onClick={resetScan}
-          aria-current={activeTab === 'home' ? 'page' : undefined}
-          aria-label={t.home}
-        >
-          <Home size={22} aria-hidden="true" />
-          <span>{t.home}</span>
+      {/* Bottom Navbar */}
+      <nav className="bottom-navbar" aria-label="Main Navigation">
+        <button className={`nav-tab-btn ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+          <Home size={22} />
+          <span>{t.nav.home}</span>
         </button>
-        <button
-          type="button"
-          className={activeTab === 'history' ? 'nav-active' : ''}
-          onClick={goHistory}
-          aria-current={activeTab === 'history' ? 'page' : undefined}
-          aria-label={t.historyTab}
-        >
-          <History size={22} aria-hidden="true" />
-          <span>{t.historyTab}</span>
+
+        <button className={`nav-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
+          <History size={22} />
+          <span>{t.nav.history}</span>
         </button>
-        <button
-          type="button"
-          className={activeTab === 'schemes' ? 'nav-active' : ''}
-          onClick={() => setActiveTab('schemes')}
-          aria-current={activeTab === 'schemes' ? 'page' : undefined}
-          aria-label={t.schemesTab}
-        >
-          <Landmark size={22} aria-hidden="true" />
-          <span>{t.schemesTab}</span>
+
+        <button className={`nav-tab-btn ${activeTab === 'schemes' ? 'active' : ''}`} onClick={() => setActiveTab('schemes')}>
+          <FileCheck size={22} />
+          <span>{t.nav.schemes}</span>
         </button>
-        <button
-          type="button"
-          className={activeTab === 'help' ? 'nav-active' : ''}
-          onClick={goHelp}
-          aria-current={activeTab === 'help' ? 'page' : undefined}
-          aria-label={t.helpTab}
-        >
-          <QuestionIcon size={22} aria-hidden="true" />
-          <span>{t.helpTab}</span>
+
+        <button className={`nav-tab-btn ${activeTab === 'help' ? 'active' : ''}`} onClick={() => setActiveTab('help')}>
+          <HelpCircle size={22} />
+          <span>{t.nav.help}</span>
         </button>
       </nav>
-    </main>
+    </div>
   );
 }
